@@ -52,4 +52,18 @@ public class Net {
             c.disconnect();
         }
     }
+
+    // Doi loi ky thuat thanh cau tieng Viet de biet can sua gi
+    static String explain(Exception e) {
+        String m = String.valueOf(e.getMessage());
+        if (e instanceof java.net.UnknownHostException)
+            return "không tìm thấy máy chủ (URL Firebase sai hoặc không có Internet)";
+        if (e instanceof java.net.SocketTimeoutException)
+            return "quá thời gian chờ (mạng chậm hoặc bị chặn)";
+        if (m.contains("HTTP 401")) return "Firebase từ chối (401) - kiểm tra lại Rules, nhớ bấm Publish";
+        if (m.contains("HTTP 403")) return "Firebase từ chối (403) - kiểm tra Rules";
+        if (m.contains("HTTP 404")) return "không thấy database (404) - kiểm tra URL, đã tạo Realtime Database chưa?";
+        if (m.contains("HTTP 423")) return "database đang bị khóa/tạm dừng (423)";
+        return e.getClass().getSimpleName() + ": " + m;
+    }
 }

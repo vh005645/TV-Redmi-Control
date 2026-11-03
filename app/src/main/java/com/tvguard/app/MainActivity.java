@@ -12,6 +12,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // Cho phep dat URL qua ADB: adb shell am start -n com.tvguard.app/.MainActivity --es db_url "https://..."
+        String du = getIntent() == null ? null : getIntent().getStringExtra("db_url");
+        if (du != null && !du.trim().isEmpty()) Cfg.setDbUrl(this, du);
         String r = Cfg.role(this);
         if ("tv".equals(r)) { startActivity(new Intent(this, TvActivity.class)); finish(); return; }
         if ("parent".equals(r)) { startActivity(new Intent(this, ParentActivity.class)); finish(); return; }

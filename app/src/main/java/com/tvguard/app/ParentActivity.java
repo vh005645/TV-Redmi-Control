@@ -22,7 +22,7 @@ import org.json.JSONObject;
 public class ParentActivity extends Activity {
     static final int PICK_LOCK = 1, PICK_SEND = 2;
     private final Handler h = new Handler(Looper.getMainLooper());
-    private EditText codeEt, minEt, secEt;
+    private EditText codeEt, minEt, secEt, urlEt;
     private TextView statusTv, msgTv;
     private ImageView shotIv;
     private RadioGroup modeRg;
@@ -66,14 +66,23 @@ public class ParentActivity extends Activity {
         TextView title = label("Điều khiển TV");
         title.setTextSize(22);
         root.addView(title);
-        if (!Cfg.urlOk(this)) root.addView(label("!! Chưa sửa db_url trong strings.xml rồi build lại !!"));
+        root.addView(label("URL Firebase Realtime Database"));
+        urlEt = new EditText(this);
+        urlEt.setHint("https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app");
+        urlEt.setSingleLine(true);
+        urlEt.setTextSize(14);
+        urlEt.setText(Cfg.urlOk(this) ? Cfg.dbUrl(this) : "");
+        root.addView(urlEt);
 
         codeEt = new EditText(this);
         codeEt.setHint("Mã TV (xem trên màn hình TV)");
         codeEt.setSingleLine(true);
         codeEt.setText(Cfg.parentCode(this));
         root.addView(codeEt);
-        root.addView(btn("Lưu mã", v -> { base(); msg("Đã lưu mã"); }));
+        root.addView(btn("Lưu URL & mã", v -> {
+            String bs = baseForSend();
+            msg(bs == null ? noBase() : "Đã lưu URL và mã");
+        }));
 
         statusTv = label("TV: chưa có dữ liệu");
         root.addView(statusTv);
@@ -131,7 +140,20 @@ public class ParentActivity extends Activity {
         String c = codeEt.getText().toString().trim().toLowerCase();
         if (c.isEmpty()) return null;
         Cfg.setParentCode(this, c);
+        if (!Cfg.urlOk(this)) return null;
         return Cfg.dbUrl(this) + "/tv/" + c;
+    }
+
+    // Luu URL dang nhap trong o (neu co) roi tra ve duong dan goc cua TV
+    private String baseForSend() {
+        String u = urlEt.getText().toString().trim();
+        if (!u.isEmpty()) Cfg.setDbUrl(this, u);
+        return base();
+    }
+
+    private String noBase() {
+        if (!Cfg.urlOk(this)) return "Chưa nhập URL Firebase (ô phía trên)";
+        return "Chưa nhập mã TV";
     }
 
     private void msg(final String s) { runOnUiThread(() -> msgTv.setText(s)); }
@@ -150,8 +172,8 @@ public class ParentActivity extends Activity {
     }
 
     private void cmd(final String type, final Object... kv) {
-        final String base = base();
-        if (base == null) { msg("Chưa nhập mã TV"); return; }
+        final String base = baseForSend();
+        if (base == null) { msg(noBase()); return; }
         final long id = System.currentTimeMillis();
         new Thread(() -> {
             try {
@@ -168,8 +190,8 @@ public class ParentActivity extends Activity {
     }
 
     private void shot() {
-        final String base = base();
-        if (base == null) { msg("Chưa nhập mã TV"); return; }
+        final String base = baseForSend();
+        if (base == null) { msg(noBase()); return; }
         msg("Đang chụp màn hình TV...");
         new Thread(() -> {
             try {
@@ -211,9 +233,9 @@ public class ParentActivity extends Activity {
         super.onActivityResult(req, res, d);
         if (res != RESULT_OK || d == null || d.getData() == null) return;
         final Uri u = d.getData();
-        final String base = base();
+        final String base = baseForSend();
         final int sec = parseInt(secEt.getText().toString(), 30);
-        if (base == null) { msg("Chưa nhập mã TV"); return; }
+        if (base == null) { msg(noBase()); return; }
         msg("Đang tải ảnh lên...");
         new Thread(() -> {
             try {
@@ -271,11 +293,13 @@ public class ParentActivity extends Activity {
                     try {
                         t = describe(Net.getObj(base + "/status.json"));
                     } catch (Exception e) {
-                        t = "TV: lỗi mạng";
+                        t = "TV: lỗi - " + Net.explain(e);
                     }
                     final String tt = t;
                     runOnUiThread(() -> statusTv.setText(tt));
                 }).start();
+            } else if (!Cfg.urlOk(ParentActivity.this)) {
+                statusTv.setText("TV: " + noBase());
             }
             h.postDelayed(this, 4000);
         }

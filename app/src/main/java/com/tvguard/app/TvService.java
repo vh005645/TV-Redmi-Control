@@ -61,24 +61,30 @@ public class TvService extends AccessibilityService {
     private void loop() {
         int tick = 0;
         while (running) {
+            SharedPreferences sp = Cfg.sp(this);
             try {
-                SharedPreferences sp = Cfg.sp(this);
-                String base = Cfg.dbUrl(this) + "/tv/" + Cfg.tvCode(this);
-                JSONObject cmd = Net.getObj(base + "/cmd.json");
-                if (!sp.contains("lastId")) {
-                    sp.edit().putLong("lastId", cmd != null ? cmd.optLong("id") : 0).apply();
-                } else if (cmd != null) {
-                    long id = cmd.optLong("id");
-                    if (id != sp.getLong("lastId", 0)) {
-                        sp.edit().putLong("lastId", id).apply();
-                        handle(cmd, base);
-                    }
-                }
+                // Hen gio chay cuc bo, khong phu thuoc mang (rut day mang van bi khoa)
                 checkTimer(sp);
-                if (tick % 3 == 0) pushStatus(base, sp);
-                lastMsg = "Kết nối OK";
+                if (!Cfg.urlOk(this)) {
+                    lastMsg = "Chưa cấu hình URL Firebase (xem hướng dẫn)";
+                } else {
+                    String base = Cfg.dbUrl(this) + "/tv/" + Cfg.tvCode(this);
+                    JSONObject cmd = Net.getObj(base + "/cmd.json");
+                    if (!sp.contains("lastId")) {
+                        sp.edit().putLong("lastId", cmd != null ? cmd.optLong("id") : 0).apply();
+                    } else if (cmd != null) {
+                        long id = cmd.optLong("id");
+                        if (id != sp.getLong("lastId", 0)) {
+                            sp.edit().putLong("lastId", id).apply();
+                            handle(cmd, base);
+                        }
+                    }
+                    checkTimer(sp);
+                    if (tick % 3 == 0) pushStatus(base, sp);
+                    lastMsg = "Kết nối OK";
+                }
             } catch (Exception e) {
-                lastMsg = "Lỗi mạng: " + e.getMessage();
+                lastMsg = "Lỗi: " + Net.explain(e);
             }
             ui.post(this::applyLock);
             tick++;
