@@ -2,11 +2,11 @@ package com.tvguard.app;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -15,74 +15,54 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class TvActivity extends Activity {
-    private static final String WSS = "android.permission.WRITE_SECURE_SETTINGS";
     private final Handler h = new Handler(Looper.getMainLooper());
-    private TextView info;
+    private TextView info, urlTv;
     private EditText urlEt;
+    private Button saveBtn, iconBtn;
     private boolean alive;
 
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             if (!alive) return;
-            if (!enabled()) autoEnable();
+            if (!Cfg.serviceEnabled(TvActivity.this)) Cfg.enableService(TvActivity.this);
             info.setText(build());
             h.postDelayed(this, 2000);
         }
     };
 
-    private String component() {
-        return getPackageName() + "/" + TvService.class.getName();
-    }
-
-    private boolean enabled() {
-        String s = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        return s != null && s.contains(getPackageName() + "/");
-    }
-
-    private boolean canWriteSecure() {
-        return checkSelfPermission(WSS) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    // Neu da cap quyen WRITE_SECURE_SETTINGS qua ADB (1 lan) thi app tu bat dich vu Tro nang
-    private boolean autoEnable() {
-        if (!canWriteSecure()) return false;
-        try {
-            String comp = component();
-            String cur = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (cur == null) cur = "";
-            if (!cur.contains(comp)) {
-                String nv = cur.isEmpty() ? comp : cur + ":" + comp;
-                Settings.Secure.putString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, nv);
-            }
-            Settings.Secure.putInt(getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     private String build() {
         StringBuilder b = new StringBuilder();
-        if (!Cfg.urlOk(this)) {
-            b.append("!! CHƯA CÓ URL FIREBASE !!\n")
-                    .append("Nhập URL vào ô bên dưới rồi bấm Lưu URL (hoặc sửa db_url trong strings.xml rồi build lại).\n\n");
-        }
-        b.append("Dịch vụ trợ năng: ").append(enabled() ? "ĐÃ BẬT" : "CHƯA BẬT").append("\n");
+        if (!Cfg.urlOk(this)) b.append("!! CHƯA CÓ URL FIREBASE - bấm \"Thay đổi URL\" để nhập !!\n\n");
+        boolean en = Cfg.serviceEnabled(this);
+        b.append("Dịch vụ trợ năng: ").append(en ? "ĐÃ BẬT" : "CHƯA BẬT").append("\n");
         b.append("Kết nối: ").append(TvService.connected ? TvService.lastMsg : "dịch vụ chưa chạy").append("\n");
-        if (!enabled()) {
-            b.append("\nCách bật nhanh nhất - chạy ADB trên máy tính (1 lần, sau đó mở lại app là tự bật):\n");
-            b.append("adb shell pm grant ").append(getPackageName()).append(" ").append(WSS).append("\n");
+        if (!en) {
+            b.append("\nBật nhanh nhất - chạy ADB trên máy tính (1 lần, sau đó app tự bật mỗi khi mở/khởi động TV):\n");
+            b.append("adb shell pm grant ").append(getPackageName()).append(" ").append(Cfg.WSS).append("\n");
             b.append("\nHoặc bật thẳng bằng ADB:\n");
-            b.append("adb shell settings put secure enabled_accessibility_services ").append(component()).append("\n");
+            b.append("adb shell settings put secure enabled_accessibility_services ").append(Cfg.serviceComponent(this)).append("\n");
             b.append("adb shell settings put secure accessibility_enabled 1\n");
+        } else if (!Cfg.canWriteSecure(this)) {
+            b.append("\nLưu ý: chưa cấp quyền tự bật lại dịch vụ. Chạy 1 lần trên máy tính:\n");
+            b.append("adb shell pm grant ").append(getPackageName()).append(" ").append(Cfg.WSS).append("\n");
         }
+        b.append("\nMở lại app khi icon bị ẩn:\nadb shell am start -n ").append(getPackageName()).append("/.MainActivity\n");
         return b.toString();
+    }
+
+    private void refreshUrl() {
+        urlTv.setText("URL Firebase: " + (Cfg.urlOk(this) ? Cfg.dbUrl(this) : "(chưa có)"));
+    }
+
+    private void refreshIconBtn() {
+        iconBtn.setText(Cfg.iconHidden(this) ? "Hiện lại biểu tượng app" : "Ẩn biểu tượng app khỏi màn hình chính");
     }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        Cfg.hideFromRecents(this, true);
         ScrollView sv = new ScrollView(this);
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -104,33 +84,51 @@ public class TvActivity extends Activity {
         info.setTextSize(18);
         l.addView(info);
 
-        TextView ul = new TextView(this);
-        ul.setText("\nURL Firebase (để trống nếu đã sửa trong strings.xml):");
-        ul.setTextSize(16);
-        l.addView(ul);
+        urlTv = new TextView(this);
+        urlTv.setTextSize(15);
+        urlTv.setPadding(0, 24, 0, 8);
+        l.addView(urlTv);
+        refreshUrl();
+
+        Button chg = new Button(this);
+        chg.setText("Thay đổi URL");
+        chg.setAllCaps(false);
+        l.addView(chg);
 
         urlEt = new EditText(this);
         urlEt.setSingleLine(true);
         urlEt.setTextSize(16);
-        urlEt.setHint("https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app");
+        urlEt.setHint("URL mới (để trống = dùng URL mặc định)");
         urlEt.setText(Cfg.savedDbUrl(this));
+        urlEt.setVisibility(View.GONE);
         l.addView(urlEt);
 
-        Button save = new Button(this);
-        save.setText("Lưu URL");
-        save.setAllCaps(false);
-        save.setOnClickListener(v -> {
+        saveBtn = new Button(this);
+        saveBtn.setText("Lưu URL");
+        saveBtn.setAllCaps(false);
+        saveBtn.setVisibility(View.GONE);
+        saveBtn.setOnClickListener(v -> {
             Cfg.setDbUrl(this, urlEt.getText().toString());
             urlEt.setText(Cfg.savedDbUrl(this));
+            urlEt.setVisibility(View.GONE);
+            saveBtn.setVisibility(View.GONE);
+            refreshUrl();
             info.setText(build());
         });
-        l.addView(save);
+        l.addView(saveBtn);
+
+        chg.setOnClickListener(v -> {
+            boolean show = urlEt.getVisibility() != View.VISIBLE;
+            urlEt.setVisibility(show ? View.VISIBLE : View.GONE);
+            saveBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) urlEt.requestFocus();
+        });
 
         Button acc = new Button(this);
         acc.setText("Mở cài đặt Trợ năng");
         acc.setAllCaps(false);
         acc.setOnClickListener(v -> {
-            if (autoEnable()) { info.setText(build()); return; }
+            if (Cfg.enableService(this)) { info.setText(build()); return; }
             try {
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
             } catch (Exception e) {
@@ -139,11 +137,27 @@ public class TvActivity extends Activity {
         });
         l.addView(acc);
 
+        iconBtn = new Button(this);
+        iconBtn.setAllCaps(false);
+        iconBtn.setOnClickListener(v -> {
+            Cfg.setIconHidden(this, !Cfg.iconHidden(this));
+            refreshIconBtn();
+        });
+        l.addView(iconBtn);
+        refreshIconBtn();
+
+        Button close = new Button(this);
+        close.setText("Đóng app (dịch vụ vẫn chạy nền)");
+        close.setAllCaps(false);
+        close.setOnClickListener(v -> finishAndRemoveTask());
+        l.addView(close);
+
         Button sw = new Button(this);
         sw.setText("Đổi chế độ");
         sw.setAllCaps(false);
         sw.setOnClickListener(v -> {
             Cfg.setRole(this, "");
+            Cfg.hideFromRecents(this, false);
             startActivity(new Intent(this, MainActivity.class));
             finish();
         });

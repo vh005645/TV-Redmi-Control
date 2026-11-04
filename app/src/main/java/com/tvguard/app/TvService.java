@@ -13,6 +13,7 @@ import android.os.Looper;
 import android.util.Base64;
 import android.view.Display;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -46,7 +47,37 @@ public class TvService extends AccessibilityService {
         }
     }
 
-    @Override public void onAccessibilityEvent(AccessibilityEvent e) { }
+    // Chan tre mo Cai dat / go cai dat de tat dich vu (tru khi phu huynh cho phep tam thoi)
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent e) {
+        if (e == null || e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        CharSequence pk = e.getPackageName();
+        if (pk == null || !isProtected(pk.toString())) return;
+        if (System.currentTimeMillis() < Cfg.sp(this).getLong("allowUntil", 0)) return;
+        performGlobalAction(GLOBAL_ACTION_HOME);
+    }
+
+    private boolean isProtected(String p) {
+        p = p.toLowerCase();
+        return p.contains("settings") || p.contains("packageinstaller") || p.contains("permissioncontroller");
+    }
+
+    // Khi dang KHOA: vo hieu hoa moi phim cua dieu khien, chi cho nut Nguon
+    @Override
+    protected boolean onKeyEvent(KeyEvent e) {
+        if (!Cfg.sp(this).getBoolean("locked", false)) return false;
+        switch (e.getKeyCode()) {
+            case KeyEvent.KEYCODE_POWER:
+            case KeyEvent.KEYCODE_TV_POWER:
+            case KeyEvent.KEYCODE_STB_POWER:
+            case KeyEvent.KEYCODE_SLEEP:
+            case KeyEvent.KEYCODE_WAKEUP:
+            case KeyEvent.KEYCODE_SOFT_SLEEP:
+                return false;
+            default:
+                return true;
+        }
+    }
     @Override public void onInterrupt() { }
 
     @Override
@@ -109,6 +140,8 @@ public class TvService extends AccessibilityService {
         o.put("remain", end > now ? (end - now) / 1000 : 0);
         o.put("mode", sp.getString("mode", "black"));
         o.put("img", imgView != null);
+        o.put("allow", sp.getLong("allowUntil", 0) > now);
+        o.put("hidden", Cfg.iconHidden(this));
         Net.put(base + "/status.json", o.toString());
     }
 
@@ -149,6 +182,17 @@ public class TvService extends AccessibilityService {
             }
             case "hideimg":
                 ui.post(this::hideImage);
+                break;
+            case "allowsettings": {
+                long min = c.optLong("minutes", 10);
+                sp.edit().putLong("allowUntil", min > 0 ? now + min * 60000L : 0).apply();
+                break;
+            }
+            case "hideicon":
+                Cfg.setIconHidden(this, true);
+                break;
+            case "showicon":
+                Cfg.setIconHidden(this, false);
                 break;
             case "lockimg": {
                 JSONObject o = Net.getObj(base + "/lockimg.json");

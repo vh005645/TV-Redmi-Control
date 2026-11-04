@@ -15,8 +15,20 @@ public class MainActivity extends Activity {
         // Cho phep dat URL qua ADB: adb shell am start -n com.tvguard.app/.MainActivity --es db_url "https://..."
         String du = getIntent() == null ? null : getIntent().getStringExtra("db_url");
         if (du != null && !du.trim().isEmpty()) Cfg.setDbUrl(this, du);
+        // Cuu ho qua ADB khi TV dang khoa / mat mang:
+        //   --ez unlock true      mo khoa ngay
+        //   --ei allow_min 10     cho phep mo Cai dat 10 phut (0 = chan lai)
+        Intent it = getIntent();
+        if (it != null) {
+            if (it.getBooleanExtra("unlock", false))
+                Cfg.sp(this).edit().putBoolean("locked", false).putLong("endAt", 0).apply();
+            if (it.hasExtra("allow_min")) {
+                int m = it.getIntExtra("allow_min", 0);
+                Cfg.sp(this).edit().putLong("allowUntil", m > 0 ? System.currentTimeMillis() + m * 60000L : 0).apply();
+            }
+        }
         String r = Cfg.role(this);
-        if ("tv".equals(r)) { startActivity(new Intent(this, TvActivity.class)); finish(); return; }
+        if ("tv".equals(r)) { Cfg.hideFromRecents(this, true); startActivity(new Intent(this, TvActivity.class)); finish(); return; }
         if ("parent".equals(r)) { startActivity(new Intent(this, ParentActivity.class)); finish(); return; }
 
         LinearLayout l = new LinearLayout(this);
@@ -35,6 +47,7 @@ public class MainActivity extends Activity {
         tv.setAllCaps(false);
         tv.setOnClickListener(v -> {
             Cfg.setRole(this, "tv");
+            Cfg.hideFromRecents(this, true);
             startActivity(new Intent(this, TvActivity.class));
             finish();
         });

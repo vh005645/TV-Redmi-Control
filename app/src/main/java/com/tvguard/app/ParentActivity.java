@@ -23,6 +23,8 @@ public class ParentActivity extends Activity {
     static final int PICK_LOCK = 1, PICK_SEND = 2;
     private final Handler h = new Handler(Looper.getMainLooper());
     private EditText codeEt, minEt, secEt, urlEt;
+    private TextView urlTv;
+    private Button urlSaveBtn;
     private TextView statusTv, msgTv;
     private ImageView shotIv;
     private RadioGroup modeRg;
@@ -35,7 +37,7 @@ public class ParentActivity extends Activity {
         Button b = new Button(this);
         b.setText(t);
         b.setAllCaps(false);
-        b.setOnClickListener(l);
+        if (l != null) b.setOnClickListener(l);
         return b;
     }
 
@@ -57,6 +59,7 @@ public class ParentActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        Cfg.hideFromRecents(this, false);
         ScrollView sv = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -66,22 +69,43 @@ public class ParentActivity extends Activity {
         TextView title = label("Điều khiển TV");
         title.setTextSize(22);
         root.addView(title);
-        root.addView(label("URL Firebase Realtime Database"));
+        urlTv = label("");
+        urlTv.setTextSize(13);
+        root.addView(urlTv);
+        refreshUrl();
+        final Button chg = btn("Thay đổi URL", null);
+        root.addView(chg);
         urlEt = new EditText(this);
-        urlEt.setHint("https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app");
+        urlEt.setHint("URL mới (để trống = dùng URL mặc định)");
         urlEt.setSingleLine(true);
         urlEt.setTextSize(14);
-        urlEt.setText(Cfg.urlOk(this) ? Cfg.dbUrl(this) : "");
+        urlEt.setText(Cfg.savedDbUrl(this));
+        urlEt.setVisibility(View.GONE);
         root.addView(urlEt);
+        urlSaveBtn = btn("Lưu URL", v -> {
+            Cfg.setDbUrl(this, urlEt.getText().toString());
+            urlEt.setText(Cfg.savedDbUrl(this));
+            urlEt.setVisibility(View.GONE);
+            urlSaveBtn.setVisibility(View.GONE);
+            refreshUrl();
+            msg("Đã lưu URL");
+        });
+        urlSaveBtn.setVisibility(View.GONE);
+        root.addView(urlSaveBtn);
+        chg.setOnClickListener(v -> {
+            boolean show = urlEt.getVisibility() != View.VISIBLE;
+            urlEt.setVisibility(show ? View.VISIBLE : View.GONE);
+            urlSaveBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+        });
 
         codeEt = new EditText(this);
         codeEt.setHint("Mã TV (xem trên màn hình TV)");
         codeEt.setSingleLine(true);
         codeEt.setText(Cfg.parentCode(this));
         root.addView(codeEt);
-        root.addView(btn("Lưu URL & mã", v -> {
+        root.addView(btn("Lưu mã", v -> {
             String bs = baseForSend();
-            msg(bs == null ? noBase() : "Đã lưu URL và mã");
+            msg(bs == null ? noBase() : "Đã lưu mã");
         }));
 
         statusTv = label("TV: chưa có dữ liệu");
@@ -110,6 +134,13 @@ public class ParentActivity extends Activity {
         root.addView(row(btn("Khóa ngay", v -> cmd("lock", "mode", selectedMode())),
                 btn("Mở khóa", v -> cmd("unlock"))));
         root.addView(btn("Chọn ảnh làm khung khóa", v -> pick(PICK_LOCK)));
+        root.addView(label("Khi đang KHÓA, điều khiển TV bị vô hiệu hóa (chỉ còn nút Nguồn)."));
+
+        root.addView(label("Bảo vệ TV"));
+        root.addView(row(btn("Mở Cài đặt TV 10 phút", v -> cmd("allowsettings", "minutes", 10)),
+                btn("Chặn Cài đặt TV", v -> cmd("allowsettings", "minutes", 0))));
+        root.addView(row(btn("Ẩn icon app TV", v -> cmd("hideicon")),
+                btn("Hiện icon app TV", v -> cmd("showicon"))));
 
         root.addView(label("Chụp màn hình TV"));
         root.addView(btn("Chụp ngay", v -> shot()));
@@ -144,15 +175,16 @@ public class ParentActivity extends Activity {
         return Cfg.dbUrl(this) + "/tv/" + c;
     }
 
-    // Luu URL dang nhap trong o (neu co) roi tra ve duong dan goc cua TV
     private String baseForSend() {
-        String u = urlEt.getText().toString().trim();
-        if (!u.isEmpty()) Cfg.setDbUrl(this, u);
         return base();
     }
 
+    private void refreshUrl() {
+        urlTv.setText("URL Firebase: " + (Cfg.urlOk(this) ? Cfg.dbUrl(this) : "(chưa có)"));
+    }
+
     private String noBase() {
-        if (!Cfg.urlOk(this)) return "Chưa nhập URL Firebase (ô phía trên)";
+        if (!Cfg.urlOk(this)) return "Chưa có URL Firebase (bấm Thay đổi URL)";
         return "Chưa nhập mã TV";
     }
 
@@ -280,6 +312,8 @@ public class ParentActivity extends Activity {
             b.append(String.format("\nCòn lại: %d phút %02d giây", r / 60, r % 60));
         } else b.append("\nKhông hẹn giờ");
         if (s.optBoolean("img")) b.append("\nĐang hiển thị ảnh của bạn");
+        if (s.optBoolean("allow")) b.append("\nCài đặt TV đang được MỞ (tạm thời)");
+        if (s.optBoolean("hidden")) b.append("\nIcon app trên TV: đang ẩn");
         return b.toString();
     }
 
