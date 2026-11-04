@@ -15,12 +15,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.Signature;
-import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.MessageDigest;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 
@@ -40,6 +43,9 @@ final class AdbLocal {
         int cmd, arg0, arg1;
         byte[] data;
     }
+
+    // Thong tin khoa lan ket noi gan nhat: "khoa cu ab12cd34" (da luu tu truoc) hay "khoa MOI ..." (vua tao)
+    static volatile String lastKeyInfo = "";
 
     private final Socket sock;
     private final DataInputStream in;
@@ -148,23 +154,37 @@ final class AdbLocal {
     }
 
     // ---------- khoa RSA ----------
-    private static KeyPair loadKey(File dir) throws Exception {
+    // synchronized: tranh 2 luong cung tao 2 khoa khac nhau (TV se hoi quyen lai moi lan)
+    private static synchronized KeyPair loadKey(File dir) throws Exception {
         File f = new File(dir, "adbkey.pk8");
+        KeyPair kp = null;
+        boolean fresh = false;
         if (f.exists()) {
             try {
                 PrivateKey pk = KeyFactory.getInstance("RSA")
                         .generatePrivate(new PKCS8EncodedKeySpec(Files.readAllBytes(f.toPath())));
-                if (pk instanceof RSAPrivateCrtKey) return new KeyPair(null, pk);
+                if (pk instanceof RSAPrivateKey) kp = new KeyPair(null, pk);
             } catch (Exception e) {
                 // file hong -> sinh khoa moi
             }
         }
-        KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
-        g.initialize(2048);
-        KeyPair kp = g.generateKeyPair();
-        FileOutputStream fo = new FileOutputStream(f);
-        fo.write(kp.getPrivate().getEncoded());
-        fo.close();
+        if (kp == null) {
+            KeyPairGenerator g = KeyPairGenerator.getInstance("RSA");
+            g.initialize(new RSAKeyGenParameterSpec(2048, RSAKeyGenParameterSpec.F4));
+            kp = g.generateKeyPair();
+            File tmp = new File(dir, "adbkey.pk8.tmp");
+            FileOutputStream fo = new FileOutputStream(tmp);
+            fo.write(kp.getPrivate().getEncoded());
+            fo.getFD().sync();
+            fo.close();
+            Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            fresh = true;
+        }
+        byte[] n = ((RSAPrivateKey) kp.getPrivate()).getModulus().toByteArray();
+        byte[] h = MessageDigest.getInstance("SHA-256").digest(n);
+        StringBuilder id = new StringBuilder(fresh ? "khóa MỚI " : "khóa cũ ");
+        for (int i = 0; i < 4; i++) id.append(String.format("%02x", h[i] & 0xff));
+        lastKeyInfo = id.toString();
         return kp;
     }
 
@@ -180,8 +200,8 @@ final class AdbLocal {
 
     // Dinh dang khoa cong khai kieu Android (mincrypt RSAPublicKey) roi base64
     static byte[] publicKeyBlob(KeyPair kp) {
-        RSAPrivateCrtKey k = (RSAPrivateCrtKey) kp.getPrivate();
-        BigInteger n = k.getModulus(), e = k.getPublicExponent();
+        BigInteger n = ((RSAPrivateKey) kp.getPrivate()).getModulus();
+        BigInteger e = BigInteger.valueOf(65537);
         BigInteger two32 = BigInteger.ONE.shiftLeft(32);
         int n0inv = two32.subtract(n.mod(two32).modInverse(two32)).intValue();
         ByteBuffer b = ByteBuffer.allocate(4 + 4 + 256 + 256 + 4).order(ByteOrder.LITTLE_ENDIAN);

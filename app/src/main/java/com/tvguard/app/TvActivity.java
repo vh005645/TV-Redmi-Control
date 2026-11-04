@@ -234,9 +234,9 @@ public class TvActivity extends Activity {
         new Thread(() -> {
             try {
                 AdbLocal.exec(getFilesDir(), 5555, "echo tvguard_ok");
-                TvService.powerMsg = "SẴN SÀNG - app có quyền tắt nguồn TV";
+                TvService.powerMsg = "SẴN SÀNG - app có quyền tắt nguồn TV [" + AdbLocal.lastKeyInfo + "]";
             } catch (Exception e) {
-                TvService.powerMsg = "Chưa được: " + AdbLocal.explain(e);
+                TvService.powerMsg = "Chưa được: " + AdbLocal.explain(e) + " [" + AdbLocal.lastKeyInfo + "]";
             } finally {
                 checking = false;
             }

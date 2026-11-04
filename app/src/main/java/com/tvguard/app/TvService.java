@@ -303,10 +303,10 @@ public class TvService extends AccessibilityService {
         boolean sent = false;
         try {
             AdbLocal.exec(getFilesDir(), 5555, "reboot -p || input keyevent 26");
-            powerMsg = "Đã gửi lệnh tắt nguồn (ADB nội bộ) lúc " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+            powerMsg = "Đã gửi lệnh tắt nguồn (ADB nội bộ) lúc " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()) + " [" + AdbLocal.lastKeyInfo + "]";
             sent = true;
         } catch (Exception e) {
-            powerMsg = "Tắt nguồn bằng ADB lỗi: " + AdbLocal.explain(e);
+            powerMsg = "Tắt nguồn bằng ADB lỗi: " + AdbLocal.explain(e) + " [" + AdbLocal.lastKeyInfo + "]";
         }
         if (sent) {
             try { Thread.sleep(15000); } catch (InterruptedException ie) { return; }
@@ -365,7 +365,9 @@ public class TvService extends AccessibilityService {
         }
         if (!has) {
             TextView t = new TextView(this);
-            t.setText("shutdown".equals(mode) ? "Hết giờ xem TV\nTV sẽ tắt ngay\nCon hãy nghỉ ngơi nhé!" : "Hết giờ xem TV\nCon hãy nghỉ ngơi nhé!");
+            t.setText("shutdown".equals(mode)
+                    ? "Bố & Mẹ tắt TV !\nHết thời gian xem TV rồi nhé các con"
+                    : "Đã hết giờ giải trí xem TV !\nCác con hãy nghe lời Bố & Mẹ");
             t.setTextColor(Color.WHITE);
             t.setTextSize(44);
             t.setGravity(Gravity.CENTER);

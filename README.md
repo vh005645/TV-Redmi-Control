@@ -1,4 +1,4 @@
-# TV Guard v1.3 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.4 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
