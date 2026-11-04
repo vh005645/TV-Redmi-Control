@@ -124,6 +124,24 @@ public class Cfg {
         }
     }
 
+    // ---------- nhat ky khoi dong (hien tren man hinh app TV de biet HyperOS chan khau nao) ----------
+    static synchronized void log(Context c, String ev) {
+        try {
+            String t = new java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date());
+            long up = SystemClock.elapsedRealtime() / 1000;
+            String line = t + " [máy bật " + up + "s] " + ev;
+            String cur = sp(c).getString("bootlog", "");
+            String[] ls = cur.isEmpty() ? new String[0] : cur.split("\n");
+            StringBuilder b = new StringBuilder();
+            int from = Math.max(0, ls.length - 11);
+            for (int i = from; i < ls.length; i++) b.append(ls[i]).append("\n");
+            b.append(line);
+            sp(c).edit().putString("bootlog", b.toString()).commit();
+        } catch (Exception e) { }
+    }
+
+    static String bootLog(Context c) { return sp(c).getString("bootlog", ""); }
+
     // ---------- tu chay khi bat TV ----------
     private static boolean launched;
 
@@ -137,7 +155,10 @@ public class Cfg {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             i.putExtra("minimize", true);
             c.startActivity(i);
-        } catch (Exception e) { }
+            log(c, "Tự mở app: đã gọi startActivity");
+        } catch (Exception e) {
+            log(c, "Tự mở app: LỖI " + e.getClass().getSimpleName());
+        }
     }
 
     // ---------- an app ----------

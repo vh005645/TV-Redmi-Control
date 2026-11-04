@@ -10,6 +10,8 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
         if (!"tv".equals(Cfg.role(c))) return;
+        Cfg.log(c, "Nhận broadcast " + (i == null ? "?" : String.valueOf(i.getAction())));
+        WakeJob.schedule(c);
         Cfg.enableService(c);
         KeepService.start(c);
         boolean replaced = i != null && Intent.ACTION_MY_PACKAGE_REPLACED.equals(i.getAction());

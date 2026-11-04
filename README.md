@@ -1,4 +1,4 @@
-# TV Guard v1.4 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.5 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -53,6 +53,21 @@ Xong bấm "Thu nhỏ app (dịch vụ vẫn chạy nền)". KHÔNG vuốt xóa 
 Khi TV khởi động (hoặc sau khi cập nhật app), app tự bật dịch vụ rồi mở ở chế độ thu nhỏ (tự quay về nền sau ~1 giây,
 giao diện được ẩn trong lúc đó). Cần chạy lệnh `appops ... SYSTEM_ALERT_WINDOW allow` ở trên (1 lần) để Android cho phép
 app tự mở màn hình từ nền. Nếu TV có mục "Tự khởi động / Autostart" trong quản lý ứng dụng thì bật cho TV Guard.
+
+### Nếu HyperOS không cho app tự khởi động
+
+Trên màn hình app TV có mục **"Nhật ký khởi động"** (dòng mới nhất ở cuối). Sau khi tắt TV rồi bật lại, đợi 1-2 phút, mở app
+và xem nhật ký: nếu không có dòng "Nhận broadcast ...BOOT_COMPLETED" hoặc "Tiến trình app khởi động" lúc máy vừa bật (số giây
+"máy bật" nhỏ) thì HyperOS đang chặn tự khởi động. Thử cấp quyền (lệnh nào báo lỗi thì bỏ qua, mỗi ROM một khác):
+
+    adb shell appops set com.tvguard.app AUTO_START allow
+    adb shell cmd appops set com.tvguard.app 10008 allow
+    adb shell cmd appops set com.tvguard.app 10021 allow
+    adb shell cmd deviceidle whitelist +com.tvguard.app
+
+(10008 = tự khởi động, 10021 = mở cửa sổ khi chạy nền, trên MIUI/HyperOS.) Hoặc vào Cài đặt TV > Ứng dụng > TV Guard, bật
+"Tự khởi động"/"Autostart" và đặt pin "Không hạn chế" nếu có. Ngoài ra app có job nền (WakeJob, 15 phút/lần, hệ thống giữ lại sau
+khi khởi động lại) để tự bật lại dịch vụ nếu broadcast bị chặn; job này chạy chậm hơn broadcast.
 
 ## Tắt nguồn TV khi hết giờ (shutdown)
 

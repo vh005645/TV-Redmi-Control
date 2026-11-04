@@ -45,6 +45,7 @@ public class TvService extends AccessibilityService {
         super.onServiceConnected();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         connected = true;
+        Cfg.log(this, "Dịch vụ trợ năng đã kết nối");
         KeepService.start(this);
         // Vua bat TV: dich vu duoc he thong bat -> tu mo app o che do thu nho
         Cfg.autoLaunch(this, false);

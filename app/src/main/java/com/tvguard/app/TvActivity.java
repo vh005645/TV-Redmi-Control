@@ -54,6 +54,7 @@ public class TvActivity extends Activity {
             b.append("\nLưu ý: chưa cấp quyền tự bật lại dịch vụ. Chạy 1 lần trên máy tính:\n");
             b.append("adb shell pm grant ").append(getPackageName()).append(" ").append(Cfg.WSS).append("\n");
         }
+        b.append("\nNhật ký khởi động (mới nhất ở cuối):\n").append(Cfg.bootLog(this)).append("\n");
         b.append("\nMở lại app khi icon bị ẩn:\nadb shell am start -n ").append(getPackageName()).append("/.MainActivity\n");
         return b.toString();
     }
@@ -75,6 +76,10 @@ public class TvActivity extends Activity {
         super.onCreate(b);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         Cfg.hideFromRecents(this, true);
+        Cfg.log(this, "Mở app" + (getIntent() != null && getIntent().getBooleanExtra("minimize", false) ? " (tự động)" : " (thủ công)")
+                + ": trợ năng " + (Cfg.serviceEnabled(this) ? "đang bật" : "ĐANG TẮT")
+                + ", dịch vụ " + (TvService.connected ? "đã kết nối" : "CHƯA kết nối"));
+        WakeJob.schedule(this);
         KeepService.start(this);
         sv = new ScrollView(this);
         LinearLayout l = new LinearLayout(this);

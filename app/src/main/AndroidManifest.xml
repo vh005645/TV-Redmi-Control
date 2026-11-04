@@ -15,6 +15,7 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
+        android:name=".TvApp"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:banner="@drawable/banner"
@@ -41,6 +42,11 @@
 
         <activity android:name=".TvActivity" android:exported="false" android:launchMode="singleTask" />
         <activity android:name=".ParentActivity" android:exported="false" />
+
+        <service
+            android:name=".WakeJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
