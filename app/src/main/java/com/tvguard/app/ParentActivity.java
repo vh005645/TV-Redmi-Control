@@ -18,18 +18,23 @@ import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONObject;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
 public class ParentActivity extends Activity {
     static final int PICK_LOCK = 1, PICK_SEND = 2;
     private final Handler h = new Handler(Looper.getMainLooper());
     private EditText codeEt, minEt, secEt, urlEt;
-    private TextView urlTv;
-    private Button urlSaveBtn;
+    private TextView urlTv, codeTv;
+    private Button urlSaveBtn, codeSaveBtn;
     private TextView statusTv, msgTv;
     private ImageView shotIv;
     private RadioGroup modeRg;
     private boolean alive;
     private long lastTs = -1, lastChange = 0;
+    private volatile long lastEnd = 0;   // gio TV se khoa (epoch ms) theo trang thai TV gui ve
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
@@ -98,15 +103,36 @@ public class ParentActivity extends Activity {
             urlSaveBtn.setVisibility(show ? View.VISIBLE : View.GONE);
         });
 
+        codeTv = label("");
+        codeTv.setTextSize(13);
+        root.addView(codeTv);
+        refreshCode();
+        final Button chgCode = btn("Thay đổi mã TV", null);
+        root.addView(chgCode);
         codeEt = new EditText(this);
-        codeEt.setHint("Mã TV (đã điền sẵn)");
+        codeEt.setHint("Mã TV mới (a-z, 0-9; để trống = dùng mã mặc định)");
         codeEt.setSingleLine(true);
         codeEt.setText(Cfg.parentCode(this));
+        codeEt.setVisibility(View.GONE);
         root.addView(codeEt);
-        root.addView(btn("Lưu mã", v -> {
-            String bs = baseForSend();
-            msg(bs == null ? noBase() : "Đã lưu mã");
-        }));
+        codeSaveBtn = btn("Lưu mã TV", v -> {
+            String c = codeEt.getText().toString().trim().toLowerCase();
+            if (!c.isEmpty() && !Cfg.validCode(c)) { msg("Mã TV không hợp lệ: chỉ gồm a-z, 0-9, dài 4-40 ký tự"); return; }
+            Cfg.setParentCode(this, c);
+            codeEt.setText(Cfg.parentCode(this));
+            codeEt.setVisibility(View.GONE);
+            codeSaveBtn.setVisibility(View.GONE);
+            refreshCode();
+            lastTs = -1;
+            msg("Đã lưu mã TV");
+        });
+        codeSaveBtn.setVisibility(View.GONE);
+        root.addView(codeSaveBtn);
+        chgCode.setOnClickListener(v -> {
+            boolean show = codeEt.getVisibility() != View.VISIBLE;
+            codeEt.setVisibility(show ? View.VISIBLE : View.GONE);
+            codeSaveBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+        });
 
         statusTv = label("TV: chưa có dữ liệu");
         root.addView(statusTv);
@@ -120,7 +146,7 @@ public class ParentActivity extends Activity {
 
         root.addView(label("Khi hết giờ:"));
         modeRg = new RadioGroup(this);
-        String[] names = {"Màn hình đen", "Khung ảnh (ảnh đã chọn)", "Tắt màn hình (nếu TV hỗ trợ)"};
+        String[] names = {"Màn hình đen", "Khung ảnh (ảnh đã chọn)", "Tắt nguồn TV (shutdown, như bấm phím Nguồn)"};
         for (int i = 0; i < names.length; i++) {
             RadioButton rb = new RadioButton(this);
             rb.setText(names[i]);
@@ -131,10 +157,11 @@ public class ParentActivity extends Activity {
         root.addView(modeRg);
 
         root.addView(row(btn("Đặt giờ", v -> timer("settimer")), btn("Cộng thêm", v -> timer("addtime"))));
+        root.addView(btn("Hủy hẹn giờ (không giới hạn thời gian)", v -> cmd("canceltimer")));
         root.addView(row(btn("Khóa ngay", v -> cmd("lock", "mode", selectedMode())),
                 btn("Mở khóa", v -> cmd("unlock"))));
         root.addView(btn("Chọn ảnh làm khung khóa", v -> pick(PICK_LOCK)));
-        root.addView(label("Khi đang KHÓA, điều khiển TV bị vô hiệu hóa (chỉ còn nút Nguồn)."));
+        root.addView(label("Khi đang KHÓA, điều khiển TV bị vô hiệu hóa (chỉ còn nút Nguồn). Chế độ \"Tắt nguồn TV\" cần cấp quyền 1 lần trên TV (nút \"Kiểm tra quyền tắt nguồn\")."));
 
         root.addView(label("Bảo vệ TV"));
         root.addView(row(btn("Mở Cài đặt TV 10 phút", v -> cmd("allowsettings", "minutes", 10)),
@@ -168,15 +195,18 @@ public class ParentActivity extends Activity {
     }
 
     private String base() {
-        String c = codeEt.getText().toString().trim().toLowerCase();
+        String c = Cfg.parentCode(this);
         if (c.isEmpty()) return null;
-        Cfg.setParentCode(this, c);
         if (!Cfg.urlOk(this)) return null;
         return Cfg.dbUrl(this) + "/tv/" + c;
     }
 
     private String baseForSend() {
         return base();
+    }
+
+    private void refreshCode() {
+        codeTv.setText("Mã TV: " + Cfg.parentCode(this));
     }
 
     private void refreshUrl() {
@@ -192,18 +222,48 @@ public class ParentActivity extends Activity {
 
     private String selectedMode() {
         int id = modeRg.getCheckedRadioButtonId();
-        return id == 101 ? "image" : id == 102 ? "sleep" : "black";
+        return id == 101 ? "image" : id == 102 ? "shutdown" : "black";
     }
 
     private int parseInt(String s, int def) {
         try { return Integer.parseInt(s.trim()); } catch (Exception e) { return def; }
     }
 
+    // "10:50" (them ngay/thang neu khong phai hom nay)
+    private String fmtTime(long ms) {
+        Calendar a = Calendar.getInstance(), b = Calendar.getInstance();
+        b.setTimeInMillis(ms);
+        boolean same = a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
+        String t = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(ms));
+        return same ? t : t + " ngày " + new SimpleDateFormat("dd/MM", Locale.getDefault()).format(new Date(ms));
+    }
+
+    private String actionText(String mode) {
+        if ("shutdown".equals(mode) || "sleep".equals(mode)) return "tắt nguồn TV";
+        if ("image".equals(mode)) return "khóa TV (khung ảnh)";
+        return "khóa TV (màn hình đen)";
+    }
+
     private void timer(String type) {
-        cmd(type, "minutes", parseInt(minEt.getText().toString(), 0), "mode", selectedMode());
+        final int min = parseInt(minEt.getText().toString(), 0);
+        if (min <= 0) { msg("Nhập số phút lớn hơn 0"); return; }
+        final String mode = selectedMode();
+        long now = System.currentTimeMillis();
+        boolean add = "addtime".equals(type);
+        long start = add && lastEnd > now ? lastEnd : now;
+        long when = start + min * 60000L;
+        String ok = (add ? "Đã cộng thêm " + min + " phút: " : "Đã đặt giờ " + min + " phút: ")
+                + fmtTime(when) + " sẽ " + actionText(mode);
+        send(type, ok, "minutes", min, "mode", mode);
     }
 
     private void cmd(final String type, final Object... kv) {
+        String ok = "Đã gửi lệnh: " + type;
+        if ("canceltimer".equals(type)) ok = "Đã hủy hẹn giờ - không giới hạn thời gian xem TV";
+        send(type, ok, kv);
+    }
+
+    private void send(final String type, final String okMsg, final Object... kv) {
         final String base = baseForSend();
         if (base == null) { msg(noBase()); return; }
         final long id = System.currentTimeMillis();
@@ -214,7 +274,7 @@ public class ParentActivity extends Activity {
                 c.put("type", type);
                 for (int i = 0; i + 1 < kv.length; i += 2) c.put((String) kv[i], kv[i + 1]);
                 Net.put(base + "/cmd.json", c.toString());
-                msg("Đã gửi lệnh: " + type);
+                msg(okMsg);
             } catch (Exception e) {
                 msg("Lỗi: " + e.getMessage());
             }
@@ -306,11 +366,20 @@ public class ParentActivity extends Activity {
         }
         boolean online = now - lastChange < 25000;
         StringBuilder b = new StringBuilder(online ? "TV: ONLINE" : "TV: OFFLINE");
-        if (s.optBoolean("locked")) b.append("\nĐang KHÓA (hết giờ)");
-        else if (s.optBoolean("timer")) {
+        String mode = s.optString("mode", "black");
+        lastEnd = s.optLong("endAt", 0);
+        if (s.optBoolean("locked")) {
+            b.append("\nĐang KHÓA (hết giờ / khóa ngay)");
+            if ("shutdown".equals(mode) || "sleep".equals(mode)) {
+                b.append("\nChế độ: tắt nguồn TV");
+                String pw = s.optString("pw", "");
+                if (!pw.isEmpty()) b.append("\nTắt nguồn: ").append(pw);
+            }
+        } else if (s.optBoolean("timer")) {
             long r = s.optLong("remain");
+            if (lastEnd > 0) b.append("\nĐã hẹn: ").append(fmtTime(lastEnd)).append(" sẽ ").append(actionText(mode));
             b.append(String.format("\nCòn lại: %d phút %02d giây", r / 60, r % 60));
-        } else b.append("\nKhông hẹn giờ");
+        } else b.append("\nKhông giới hạn thời gian xem TV");
         if (s.optBoolean("img")) b.append("\nĐang hiển thị ảnh của bạn");
         if (s.optBoolean("allow")) b.append("\nCài đặt TV đang được MỞ (tạm thời)");
         if (s.optBoolean("hidden")) b.append("\nIcon app trên TV: đang ẩn");

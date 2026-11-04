@@ -3,9 +3,11 @@ package com.tvguard.app;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.ComponentName;
+import android.content.Intent;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.SystemClock;
 import android.provider.Settings;
 import java.security.SecureRandom;
 
@@ -48,7 +50,22 @@ public class Cfg {
         return c.getString(R.string.tv_code).trim().toLowerCase();
     }
 
+    // Ma TV nhap tay (de trong = dung ma co dinh)
+    static String savedTvCode(Context c) { return sp(c).getString("tvcode_custom", ""); }
+
+    static boolean validCode(String s) { return s != null && s.matches("[a-z0-9]{4,40}"); }
+
+    // Tra ve false neu ma khong hop le (chi gom a-z, 0-9, 4-40 ky tu). Rong = quay ve ma co dinh
+    static boolean setTvCode(Context c, String s) {
+        s = s == null ? "" : s.trim().toLowerCase();
+        if (!s.isEmpty() && !validCode(s)) return false;
+        sp(c).edit().putString("tvcode_custom", s.equals(fixedCode(c)) ? "" : s).remove("lastId").apply();
+        return true;
+    }
+
     static synchronized String tvCode(Context c) {
+        String cu = savedTvCode(c);
+        if (!cu.isEmpty()) return cu;
         String f = fixedCode(c);
         if (!f.isEmpty()) return f;
         String s = sp(c).getString("tvcode", null);
@@ -105,6 +122,22 @@ public class Cfg {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    // ---------- tu chay khi bat TV ----------
+    private static boolean launched;
+
+    // Mo TvActivity o che do thu nho (tu quay ve nen). force=true: bo qua gioi han "vua khoi dong"
+    static synchronized void autoLaunch(Context c, boolean force) {
+        if (!"tv".equals(role(c))) return;
+        if (!force && (launched || SystemClock.elapsedRealtime() > 10 * 60 * 1000L)) return;
+        launched = true;
+        try {
+            Intent i = new Intent(c, TvActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            i.putExtra("minimize", true);
+            c.startActivity(i);
+        } catch (Exception e) { }
     }
 
     // ---------- an app ----------

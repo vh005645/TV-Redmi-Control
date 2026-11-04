@@ -9,6 +9,8 @@
     <!-- Chi duoc cap qua ADB (pm grant), dung de app tu bat lai dich vu Tro nang tren TV -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Cap qua ADB (appops set ... SYSTEM_ALERT_WINDOW allow): cho phep app tu mo len luc vua bat TV -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
@@ -37,7 +39,7 @@
             </intent-filter>
         </activity-alias>
 
-        <activity android:name=".TvActivity" android:exported="false" />
+        <activity android:name=".TvActivity" android:exported="false" android:launchMode="singleTask" />
         <activity android:name=".ParentActivity" android:exported="false" />
 
         <receiver android:name=".BootReceiver" android:exported="true">

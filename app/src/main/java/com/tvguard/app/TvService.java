@@ -29,12 +29,15 @@ public class TvService extends AccessibilityService {
     static volatile boolean connected = false;
     static volatile String lastMsg = "";
     static volatile String lastKey = "";
+    static volatile String powerMsg = "";   // ket qua lan tat nguon / kiem tra ADB gan nhat
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private volatile boolean running = false;
     private WindowManager wm;
     private View lockView, imgView;
     private String shownMode = "";
+    private long shutdownDue = 0, lastShutdownTry = 0;
+    private volatile boolean shutting = false;
     private final Runnable hideImgR = this::hideImage;
 
     @Override
@@ -43,6 +46,8 @@ public class TvService extends AccessibilityService {
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         connected = true;
         KeepService.start(this);
+        // Vua bat TV: dich vu duoc he thong bat -> tu mo app o che do thu nho
+        Cfg.autoLaunch(this, false);
         if (!running) {
             running = true;
             new Thread(this::loop, "tvguard").start();
@@ -142,7 +147,9 @@ public class TvService extends AccessibilityService {
         o.put("locked", sp.getBoolean("locked", false));
         o.put("timer", end > 0);
         o.put("remain", end > now ? (end - now) / 1000 : 0);
-        o.put("mode", sp.getString("mode", "black"));
+        o.put("endAt", end > now ? end : 0);
+        o.put("pw", powerMsg);
+        o.put("mode", normMode(sp.getString("mode", "black")));
         o.put("img", imgView != null);
         o.put("allow", sp.getLong("allowUntil", 0) > now);
         o.put("hidden", Cfg.iconHidden(this));
@@ -153,7 +160,7 @@ public class TvService extends AccessibilityService {
     private void handle(JSONObject c, String base) throws Exception {
         SharedPreferences sp = Cfg.sp(this);
         String type = c.optString("type");
-        String mode = c.optString("mode", sp.getString("mode", "black"));
+        String mode = normMode(c.optString("mode", sp.getString("mode", "black")));
         long now = System.currentTimeMillis();
         switch (type) {
             case "settimer": {
@@ -167,6 +174,10 @@ public class TvService extends AccessibilityService {
                 sp.edit().putLong("endAt", b + min * 60000L).putBoolean("locked", false).putString("mode", mode).apply();
                 break;
             }
+            case "canceltimer":
+                // Huy hen gio = khong gioi han thoi gian xem TV (neu dang khoa do het gio thi mo khoa luon)
+                sp.edit().putLong("endAt", 0).putBoolean("locked", false).apply();
+                break;
             case "lock":
                 sp.edit().putBoolean("locked", true).putLong("endAt", 0).putString("mode", mode).apply();
                 break;
@@ -249,23 +260,58 @@ public class TvService extends AccessibilityService {
     }
 
     // ---------- khoa man hinh ----------
+    // Phien ban cu luu mode "sleep" (tat man hinh) -> nay la "shutdown" (tat nguon TV)
+    static String normMode(String m) { return "sleep".equals(m) ? "shutdown" : m; }
+
     private void applyLock() {
         SharedPreferences sp = Cfg.sp(this);
         boolean locked = sp.getBoolean("locked", false);
-        String mode = sp.getString("mode", "black");
+        String mode = normMode(sp.getString("mode", "black"));
         if (locked) {
             if (lockView == null || !mode.equals(shownMode)) {
-                boolean first = lockView == null;
                 showLock(mode);
-                if (first && "sleep".equals(mode)) performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+                // Cho ~8 giay truoc khi tat nguon de kip nhan lenh "Mo khoa" dang cho tren Firebase
+                if ("shutdown".equals(mode) && shutdownDue == 0) shutdownDue = System.currentTimeMillis() + 8000;
             } else {
                 lockView.requestFocus();
             }
             mute(true);
-        } else if (lockView != null) {
-            hideLock();
-            mute(false);
+            if ("shutdown".equals(mode)) maybeShutdown();
+        } else {
+            shutdownDue = 0;
+            if (lockView != null) {
+                hideLock();
+                mute(false);
+            }
         }
+    }
+
+    // ---------- tat nguon TV ----------
+    private void maybeShutdown() {
+        long now = System.currentTimeMillis();
+        if (shutting || now < shutdownDue || now - lastShutdownTry < 30000) return;
+        lastShutdownTry = now;
+        shutting = true;
+        new Thread(() -> {
+            try { powerOff(); } finally { shutting = false; }
+        }, "tvguard-off").start();
+    }
+
+    // Cach 1: ADB noi bo chay "reboot -p" (tat nguon that), neu khong duoc thi gia lap phim Nguon.
+    // Cach 2 (du phong, neu TV van con bat sau 15 giay hoac ADB loi): khoa man hinh / dua TV vao che do cho.
+    private void powerOff() {
+        boolean sent = false;
+        try {
+            AdbLocal.exec(getFilesDir(), 5555, "reboot -p || input keyevent 26");
+            powerMsg = "Đã gửi lệnh tắt nguồn (ADB nội bộ) lúc " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date());
+            sent = true;
+        } catch (Exception e) {
+            powerMsg = "Tắt nguồn bằng ADB lỗi: " + AdbLocal.explain(e);
+        }
+        if (sent) {
+            try { Thread.sleep(15000); } catch (InterruptedException ie) { return; }
+        }
+        ui.post(() -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN));
     }
 
     private void mute(boolean m) {
@@ -317,9 +363,9 @@ public class TvService extends AccessibilityService {
                 }
             }
         }
-        if (!has && !"sleep".equals(mode)) {
+        if (!has) {
             TextView t = new TextView(this);
-            t.setText("Hết giờ xem TV\nCon hãy nghỉ ngơi nhé!");
+            t.setText("shutdown".equals(mode) ? "Hết giờ xem TV\nTV sẽ tắt ngay\nCon hãy nghỉ ngơi nhé!" : "Hết giờ xem TV\nCon hãy nghỉ ngơi nhé!");
             t.setTextColor(Color.WHITE);
             t.setTextSize(44);
             t.setGravity(Gravity.CENTER);
