@@ -43,7 +43,14 @@ public class Cfg {
     static String role(Context c) { return sp(c).getString("role", ""); }
     static void setRole(Context c, String r) { sp(c).edit().putString("role", r).apply(); }
 
+    // Ma TV co dinh lay tu strings.xml (tv_code). Neu de trong thi sinh ngau nhien 1 lan va luu lai
+    static String fixedCode(Context c) {
+        return c.getString(R.string.tv_code).trim().toLowerCase();
+    }
+
     static synchronized String tvCode(Context c) {
+        String f = fixedCode(c);
+        if (!f.isEmpty()) return f;
         String s = sp(c).getString("tvcode", null);
         if (s == null) {
             String a = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -56,8 +63,15 @@ public class Cfg {
         return s;
     }
 
-    static String parentCode(Context c) { return sp(c).getString("pcode", ""); }
-    static void setParentCode(Context c, String s) { sp(c).edit().putString("pcode", s).apply(); }
+    // Dien thoai: mac dinh dung ma co dinh; chi luu rieng khi nguoi dung nhap ma khac
+    static String parentCode(Context c) {
+        String s = sp(c).getString("pcode2", "");
+        return s.isEmpty() ? fixedCode(c) : s;
+    }
+
+    static void setParentCode(Context c, String s) {
+        sp(c).edit().putString("pcode2", s.equals(fixedCode(c)) ? "" : s).apply();
+    }
 
     // ---------- dich vu Tro nang ----------
     static final String WSS = "android.permission.WRITE_SECURE_SETTINGS";

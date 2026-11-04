@@ -28,6 +28,7 @@ import java.io.FileOutputStream;
 public class TvService extends AccessibilityService {
     static volatile boolean connected = false;
     static volatile String lastMsg = "";
+    static volatile String lastKey = "";
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private volatile boolean running = false;
@@ -41,6 +42,7 @@ public class TvService extends AccessibilityService {
         super.onServiceConnected();
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         connected = true;
+        KeepService.start(this);
         if (!running) {
             running = true;
             new Thread(this::loop, "tvguard").start();
@@ -51,6 +53,7 @@ public class TvService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
         if (e == null || e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
+        if (Cfg.sp(this).getBoolean("locked", false)) ui.post(this::applyLock);
         CharSequence pk = e.getPackageName();
         if (pk == null || !isProtected(pk.toString())) return;
         if (System.currentTimeMillis() < Cfg.sp(this).getLong("allowUntil", 0)) return;
@@ -66,6 +69,7 @@ public class TvService extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(KeyEvent e) {
         if (!Cfg.sp(this).getBoolean("locked", false)) return false;
+        if (e.getAction() == KeyEvent.ACTION_DOWN) lastKey = KeyEvent.keyCodeToString(e.getKeyCode());
         switch (e.getKeyCode()) {
             case KeyEvent.KEYCODE_POWER:
             case KeyEvent.KEYCODE_TV_POWER:
@@ -142,6 +146,7 @@ public class TvService extends AccessibilityService {
         o.put("img", imgView != null);
         o.put("allow", sp.getLong("allowUntil", 0) > now);
         o.put("hidden", Cfg.iconHidden(this));
+        o.put("key", lastKey);
         Net.put(base + "/status.json", o.toString());
     }
 
@@ -253,6 +258,8 @@ public class TvService extends AccessibilityService {
                 boolean first = lockView == null;
                 showLock(mode);
                 if (first && "sleep".equals(mode)) performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+            } else {
+                lockView.requestFocus();
             }
             mute(true);
         } else if (lockView != null) {
@@ -279,10 +286,23 @@ public class TvService extends AccessibilityService {
                 PixelFormat.TRANSLUCENT);
     }
 
+    // Lop phu KHOA: nhan tieu diem ban phim nen moi phim (Back, OK, mui ten...) deu vao day, khong toi app ben duoi
+    private WindowManager.LayoutParams lockParams() {
+        return new WindowManager.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+    }
+
     private void showLock(String mode) {
         hideLock();
-        FrameLayout f = new FrameLayout(this);
+        final FrameLayout f = new FrameLayout(this);
         f.setBackgroundColor(Color.BLACK);
+        f.setFocusable(true);
+        f.setFocusableInTouchMode(true);
+        f.setOnKeyListener((v, code, ev) -> true);
         boolean has = false;
         if ("image".equals(mode)) {
             File ff = new File(getFilesDir(), "lock.jpg");
@@ -306,9 +326,11 @@ public class TvService extends AccessibilityService {
             f.addView(t, new FrameLayout.LayoutParams(-1, -1));
         }
         try {
-            wm.addView(f, overlayParams());
+            wm.addView(f, lockParams());
             lockView = f;
             shownMode = mode;
+            f.requestFocus();
+            f.post(f::requestFocus);
         } catch (Exception e) {
             lastMsg = "Overlay lỗi: " + e.getMessage();
         }

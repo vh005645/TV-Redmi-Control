@@ -3,5 +3,7 @@
     <string name="app_name">TV Guard</string>
     <!-- URL Firebase mac dinh (khong co dau / o cuoi). Muon doi tam thoi thi dung nut "Thay doi URL" trong app -->
     <string name="db_url" translatable="false">https://tv-redmi-control-default-rtdb.asia-southeast1.firebasedatabase.app</string>
+    <!-- Ma TV CO DINH (10 ky tu a-z, 2-9). Khong doi khi cai lai / cap nhat. Dien thoai tu dien san. De trong = sinh ngau nhien moi lan cai -->
+    <string name="tv_code" translatable="false">emzty9p9e3</string>
     <string name="svc_desc">Kiểm soát thời gian xem TV, hiển thị ảnh và chụp màn hình theo yêu cầu của phụ huynh.</string>
 </resources>

@@ -99,7 +99,7 @@ public class ParentActivity extends Activity {
         });
 
         codeEt = new EditText(this);
-        codeEt.setHint("Mã TV (xem trên màn hình TV)");
+        codeEt.setHint("Mã TV (đã điền sẵn)");
         codeEt.setSingleLine(true);
         codeEt.setText(Cfg.parentCode(this));
         root.addView(codeEt);
@@ -314,6 +314,8 @@ public class ParentActivity extends Activity {
         if (s.optBoolean("img")) b.append("\nĐang hiển thị ảnh của bạn");
         if (s.optBoolean("allow")) b.append("\nCài đặt TV đang được MỞ (tạm thời)");
         if (s.optBoolean("hidden")) b.append("\nIcon app trên TV: đang ẩn");
+        String k = s.optString("key", "");
+        if (!k.isEmpty()) b.append("\nPhím cuối bị chặn khi khóa: ").append(k);
         return b.toString();
     }
 

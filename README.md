@@ -1,4 +1,4 @@
-# TV Guard v1.1 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.2 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -17,7 +17,20 @@ Chỉ khi cần đổi mới bấm nút "Thay đổi URL" (để trống rồi L
       }
     }
 
-## Cài đặt trên TV (chạy trên máy tính, 1 lần)
+## Mã TV cố định
+
+Mã TV được gán cứng trong `app/src/main/res/values/strings.xml` (dòng `tv_code`): **emzty9p9e3**
+Mã không đổi khi cài lại hay cập nhật. App điện thoại tự điền sẵn mã này, không cần nhập.
+Muốn đổi mã: sửa dòng `tv_code` (10 ký tự a-z, 2-9) rồi build lại. Mã này như mật khẩu,
+hãy để repo GitHub ở chế độ **Private**.
+
+## Khóa ký cố định
+
+File `app/tvguard.keystore` được dùng để ký mọi bản build, nên các bản build sau cài đè được
+bằng `adb install -r` mà không phải gỡ app, không mất quyền đã cấp. (Lần đầu chuyển sang bản có
+khóa này cần gỡ bản cũ 1 lần: `adb uninstall com.tvguard.app`.)
+
+## Cài đặt trên TV (chạy trên máy tính)
 
     adb connect IP-CỦA-TV:5555
     adb install -r TVGuard.apk
@@ -31,14 +44,13 @@ Nếu chưa tự bật, bấm "Mở cài đặt Trợ năng", hoặc chạy:
     adb shell settings put secure enabled_accessibility_services com.tvguard.app/com.tvguard.app.TvService
     adb shell settings put secure accessibility_enabled 1
 
-Sau khi cài đè bản mới bằng `adb install -r`, nếu phím điều khiển vẫn chưa bị chặn khi khóa,
-hãy tắt rồi bật lại dịch vụ (hoặc khởi động lại TV).
+Xong bấm "Thu nhỏ app (dịch vụ vẫn chạy nền)". KHÔNG vuốt xóa / Force stop app trên TV.
 
 ## Chạy ẩn và chống thoát
 
 - App tự bật lại dịch vụ khi TV khởi động / khi app được cập nhật (BootReceiver).
 - App trên TV không hiện trong danh sách đa nhiệm (Recent apps), trẻ không vuốt xóa được.
-- Bấm "Đóng app (dịch vụ vẫn chạy nền)" khi cài xong. Dịch vụ chạy nền, không cần mở app.
+- Bấm "Thu nhỏ app" khi cài xong; phím Back trong app cũng chỉ thu nhỏ. Dịch vụ giữ nền (KeepService) tự bật lại Trợ năng nếu bị tắt.
 - Nút "Ẩn biểu tượng app khỏi màn hình chính" (hoặc "Ẩn icon app TV" trên điện thoại)
   làm icon biến mất khỏi TV. Mở lại: `adb shell am start -n com.tvguard.app/.MainActivity`
   hoặc bấm "Hiện icon app TV" trên điện thoại.
@@ -49,8 +61,9 @@ hãy tắt rồi bật lại dịch vụ (hoặc khởi động lại TV).
 
 ## Khóa TV
 
-Khi đang KHÓA (hết giờ / Khóa ngay): màn hình đen hoặc khung ảnh, tắt tiếng, và mọi nút của
-điều khiển bị vô hiệu hóa, chỉ còn nút Nguồn. Hẹn giờ chạy ngay trên TV nên rút dây mạng vẫn bị khóa.
+Khi đang KHÓA (hết giờ / Khóa ngay): màn hình đen hoặc khung ảnh, tắt tiếng. Lớp phủ khóa giữ tiêu điểm
+bàn phím nên mọi nút (Back, OK, mũi tên...) bị nuốt, không tới app bên dưới; nút Nguồn vẫn dùng được.
+Nút Home do hệ thống xử lý nên có thể về màn hình chính phía sau, nhưng màn hình vẫn đen và không điều khiển được. Hẹn giờ chạy ngay trên TV nên rút dây mạng vẫn bị khóa.
 
 Cứu hộ nếu TV bị khóa mà mất mạng (chạy ADB):
 

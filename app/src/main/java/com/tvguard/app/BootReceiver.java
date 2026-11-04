@@ -10,5 +10,6 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context c, Intent i) {
         if (!"tv".equals(Cfg.role(c))) return;
         Cfg.enableService(c);
+        KeepService.start(c);
     }
 }

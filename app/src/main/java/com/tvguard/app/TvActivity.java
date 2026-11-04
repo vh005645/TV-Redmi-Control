@@ -63,6 +63,7 @@ public class TvActivity extends Activity {
         super.onCreate(b);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         Cfg.hideFromRecents(this, true);
+        KeepService.start(this);
         ScrollView sv = new ScrollView(this);
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -70,7 +71,7 @@ public class TvActivity extends Activity {
         sv.addView(l);
 
         TextView t = new TextView(this);
-        t.setText("TV Guard - chế độ TV\nNhập mã này vào app chủ trên điện thoại:");
+        t.setText("TV Guard - chế độ TV\nMã TV (cố định, app điện thoại đã tự điền sẵn):");
         t.setTextSize(22);
         l.addView(t);
 
@@ -146,10 +147,11 @@ public class TvActivity extends Activity {
         l.addView(iconBtn);
         refreshIconBtn();
 
+        // KHONG dung finish/finishAndRemoveTask: he thong coi nhu vuot xoa da nhiem va dung luon dich vu
         Button close = new Button(this);
-        close.setText("Đóng app (dịch vụ vẫn chạy nền)");
+        close.setText("Thu nhỏ app (dịch vụ vẫn chạy nền)");
         close.setAllCaps(false);
-        close.setOnClickListener(v -> finishAndRemoveTask());
+        close.setOnClickListener(v -> moveTaskToBack(true));
         l.addView(close);
 
         Button sw = new Button(this);
@@ -166,6 +168,9 @@ public class TvActivity extends Activity {
         setContentView(sv);
         acc.requestFocus();
     }
+
+    // Phim Back chi thu nho app, khong thoat han (thoat han co the lam mat dich vu tren MIUI)
+    @Override public void onBackPressed() { moveTaskToBack(true); }
 
     @Override protected void onResume() { super.onResume(); alive = true; h.post(refresh); }
     @Override protected void onPause() { super.onPause(); alive = false; }

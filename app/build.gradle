@@ -10,8 +10,18 @@ android {
         applicationId 'com.tvguard.app'
         minSdk 30
         targetSdk 34
-        versionCode 2
-        versionName '1.1'
+        versionCode 3
+        versionName '1.2'
+    }
+    // Khoa ky CO DINH (luu trong repo): moi lan build tren GitHub deu cung chu ky,
+    // nen cai de (adb install -r) khong can go app, khong mat quyen/cai dat.
+    signingConfigs {
+        debug {
+            storeFile file('tvguard.keystore')
+            storePassword 'tvguard123'
+            keyAlias 'tvguard'
+            keyPassword 'tvguard123'
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
