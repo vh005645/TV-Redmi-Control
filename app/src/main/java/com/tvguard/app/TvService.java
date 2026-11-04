@@ -65,9 +65,27 @@ public class TvService extends AccessibilityService {
         if (e == null || e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return;
         if (Cfg.sp(this).getBoolean("locked", false)) ui.post(this::applyLock);
         CharSequence pk = e.getPackageName();
+        if (pk != null && VOICE_PKG.contentEquals(pk)) onVoiceShown();
         if (pk == null || !isProtected(pk.toString())) return;
         if (System.currentTimeMillis() < Cfg.sp(this).getLong("allowUntil", 0)) return;
         performGlobalAction(GLOBAL_ACTION_HOME);
+    }
+
+    // Tro ly giong noi cua TV luon hien khi bat TV -> dung lam tin hieu "TV vua bat" de khoi phuc + mo app thu nho
+    private static final String VOICE_PKG = "com.xiaomi.voicecontrol";
+    private static long lastVoice = 0, lastVoiceLaunch = 0;
+
+    private void onVoiceShown() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (lastVoice != 0 && now - lastVoice < 60000) return;     // toi da 1 lan/phut
+        lastVoice = now;
+        Cfg.log(this, "Trợ lý giọng nói hiện (" + VOICE_PKG + ") -> khôi phục");
+        Cfg.recover(this, "voice");
+        // mo app thu nho toi da 1 lan/10 phut de khong lam gian doan khi tre dung giong noi
+        if (lastVoiceLaunch == 0 || now - lastVoiceLaunch > 10 * 60000L) {
+            lastVoiceLaunch = now;
+            Cfg.autoLaunch(this, false);
+        }
     }
 
     private boolean isProtected(String p) {
