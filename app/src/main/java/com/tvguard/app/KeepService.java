@@ -27,7 +27,16 @@ public class KeepService extends Service {
 
     private final Runnable watch = new Runnable() {
         @Override public void run() {
-            if ("tv".equals(Cfg.role(KeepService.this))) Cfg.ensureService(KeepService.this);
+            if ("tv".equals(Cfg.role(KeepService.this))) {
+                Cfg.ensureService(KeepService.this);
+                // vong lap Firebase khong co nhip tim > 60 giay (mang treo sau khi TV bat lai...) -> tao vong lap moi
+                TvService s = TvService.inst;
+                long now = SystemClock.elapsedRealtime();
+                if (s != null && TvService.connected && now - TvService.beat > 60000) {
+                    Cfg.log(KeepService.this, "Vòng lặp Firebase bị treo " + (now - TvService.beat) / 1000 + "s -> khởi động lại");
+                    s.restartLoop();
+                }
+            }
             h.postDelayed(this, 5000);
         }
     };
@@ -36,7 +45,10 @@ public class KeepService extends Service {
     private final BroadcastReceiver wake = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             String a = i == null ? "?" : String.valueOf(i.getAction());
-            Cfg.recover(c, a.replace("android.intent.action.", ""));
+            Cfg.log(c, "TV bật lại (" + a.replace("android.intent.action.", "") + "), dịch vụ " + (TvService.connected ? "đang kết nối" : "CHƯA kết nối"));
+            Cfg.recover(c, a);
+            TvService s = TvService.inst;
+            if (s != null && TvService.connected) s.restartLoop();   // ket noi mang moi sau khi thoat che do cho
             Cfg.autoLaunch(c, false);
         }
     };

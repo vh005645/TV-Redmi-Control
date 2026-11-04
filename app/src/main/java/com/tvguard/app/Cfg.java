@@ -106,9 +106,63 @@ public class Cfg {
         return c.checkSelfPermission(WSS) == PackageManager.PERMISSION_GRANTED;
     }
 
+    // Dich vu "neo" (NotificationListener): he thong tu khoi dong lai dich vu nay khi tien trinh app bi giet,
+    // moi lan no ket noi lai thi app chay phan khoi phuc (ep bind lai Tro nang, mo dich vu giu nen)
+    static void enableListener(Context c) {
+        try {
+            String comp = new ComponentName(c, KeepListener.class).flattenToString();
+            String cur = Settings.Secure.getString(c.getContentResolver(), "enabled_notification_listeners");
+            if (cur == null) cur = "";
+            if (!cur.contains(comp))
+                Settings.Secure.putString(c.getContentResolver(), "enabled_notification_listeners", cur.isEmpty() ? comp : cur + ":" + comp);
+        } catch (Exception e) { }
+    }
+
+    // Ghi vao nhat ky ly do tien trinh truoc do bi ket thuc (API 30+): biet chinh xac HyperOS giet app vi sao
+    static void logExitReasons(Context c) {
+        try {
+            ActivityManager am = (ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+            java.util.List<android.app.ApplicationExitInfo> l = am.getHistoricalProcessExitReasons(c.getPackageName(), 0, 6);
+            long seen = sp(c).getLong("exitSeen", 0), max = seen;
+            for (int i = l.size() - 1; i >= 0; i--) {
+                android.app.ApplicationExitInfo e = l.get(i);
+                if (e.getTimestamp() <= seen) continue;
+                max = Math.max(max, e.getTimestamp());
+                String d = e.getDescription();
+                log(c, "Tiến trình trước kết thúc lúc "
+                        + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date(e.getTimestamp()))
+                        + ": " + exitName(e.getReason()) + (d == null || d.isEmpty() ? "" : " - " + d));
+            }
+            if (max > seen) sp(c).edit().putLong("exitSeen", max).apply();
+        } catch (Exception e) { }
+    }
+
+    private static String exitName(int r) {
+        switch (r) {
+            case 1: return "EXIT_SELF (app tự thoát)";
+            case 2: return "SIGNALED (bị giết bằng tín hiệu)";
+            case 3: return "LOW_MEMORY (thiếu RAM)";
+            case 4: return "CRASH (app lỗi)";
+            case 5: return "CRASH_NATIVE";
+            case 6: return "ANR (treo)";
+            case 7: return "INITIALIZATION_FAILURE";
+            case 8: return "PERMISSION_CHANGE (đổi quyền)";
+            case 9: return "EXCESSIVE_RESOURCE_USAGE";
+            case 10: return "USER_REQUESTED (người dùng/Force stop)";
+            case 11: return "USER_STOPPED";
+            case 12: return "DEPENDENCY_DIED";
+            case 13: return "OTHER";
+            case 14: return "FREEZER (bị đóng băng)";
+            case 15: return "PACKAGE_STATE_CHANGE";
+            case 16: return "PACKAGE_UPDATED";
+            default: return "mã " + r;
+        }
+    }
+
     // Can da cap quyen WRITE_SECURE_SETTINGS qua ADB (1 lan)
     static boolean enableService(Context c) {
         if (!canWriteSecure(c)) return false;
+        enableListener(c);
         try {
             String comp = serviceComponent(c);
             String cur = Settings.Secure.getString(c.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
@@ -133,7 +187,7 @@ public class Cfg {
             String cur = sp(c).getString("bootlog", "");
             String[] ls = cur.isEmpty() ? new String[0] : cur.split("\n");
             StringBuilder b = new StringBuilder();
-            int from = Math.max(0, ls.length - 11);
+            int from = Math.max(0, ls.length - 79);
             for (int i = from; i < ls.length; i++) b.append(ls[i]).append("\n");
             b.append(line);
             sp(c).edit().putString("bootlog", b.toString()).commit();
@@ -145,7 +199,6 @@ public class Cfg {
     // ---------- khoi phuc khi bat TV ----------
     static final long PROC_START = SystemClock.elapsedRealtime();
     private static long lastRebind = 0;
-    private static long lastGrant = 0;
     private static final long LAUNCH_COOLDOWN = 60 * 1000L;
 
     // Dam bao dich vu Tro nang dang BAT va dang KET NOI. Neu da bat trong Settings nhung he thong
@@ -156,8 +209,8 @@ public class Cfg {
             if (!serviceEnabled(c)) { enableService(c); return; }
             if (TvService.connected) return;
             long now = SystemClock.elapsedRealtime();
-            // cho he thong tu bind 20 giay dau sau khi tien trinh khoi dong, roi moi ep; moi lan ep cach nhau >= 30 giay
-            if (now - PROC_START < 20000 || now - lastRebind < 30000) return;
+            // cho he thong tu bind 6 giay dau sau khi tien trinh khoi dong, roi moi ep; moi lan ep cach nhau >= 15 giay
+            if (now - PROC_START < 6000 || now - lastRebind < 15000) return;
             lastRebind = now;
             final String comp = serviceComponent(c);
             String cur = Settings.Secure.getString(c.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
@@ -178,7 +231,6 @@ public class Cfg {
     // Goi o moi diem vao (boot, man hinh bat, alarm, job, mo app): dam bao moi thu dang chay
     static void recover(Context c, String why) {
         if (!"tv".equals(role(c))) return;
-        log(c, "Khôi phục (" + why + ")");
         WakeJob.schedule(c);
         KeepService.scheduleWatchdog(c);
         enableService(c);
@@ -223,9 +275,11 @@ public class Cfg {
     // Lenh nao khong co tren ROM thi bo qua, khong anh huong lenh khac.
     static void selfGrant(Context c) {
         if (!sp(c).getBoolean("adbOk", false)) return;
-        long now = SystemClock.elapsedRealtime();
-        if (lastGrant != 0 && now - lastGrant < 30 * 60 * 1000L) return;
-        lastGrant = now;
+        // moi 12 gio 1 lan (luu ben vung): doi quyen co the khien HyperOS khoi dong lai tien trinh
+        long wall = System.currentTimeMillis();
+        long lastW = sp(c).getLong("grantWall", 0);
+        if (lastW != 0 && wall >= lastW && wall - lastW < 12 * 3600 * 1000L) return;
+        sp(c).edit().putLong("grantWall", wall).apply();
         final Context app = c.getApplicationContext();
         final String p = app.getPackageName();
         final String cmd = "pm grant " + p + " " + WSS + ";"

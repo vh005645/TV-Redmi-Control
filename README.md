@@ -1,4 +1,4 @@
-# TV Guard v1.6 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.7 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -82,6 +82,10 @@ Khi TV bật lại, app tự khôi phục và tự mở thu nhỏ qua các đư�
 6. Nếu mở app từ nền bị HyperOS chặn: app dùng ADB nội bộ chạy `am start ... --ez minimize true`.
 7. Tự cấp lại quyền chạy nền qua ADB nội bộ (autostart 10008/10021, SYSTEM_ALERT_WINDOW, deviceidle, standby-bucket)
    sau khi bạn đã bấm "Kiểm tra quyền tắt nguồn" + "Luôn cho phép" 1 lần.
+
+8. (v1.7) Dịch vụ "neo" KeepListener (NotificationListener, tự bật bằng WRITE_SECURE_SETTINGS): hệ thống tự khởi động lại nó
+   khi tiến trình bị giết, rồi nó ép bind lại dịch vụ Trợ năng. Vòng lặp Firebase có "nhịp tim" 60 giây, treo thì tự tạo lại,
+   và được tạo lại mỗi khi TV bật màn hình. Nhật ký giờ ghi 80 dòng và ghi **lý do tiến trình trước bị kết thúc**.
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 

@@ -30,6 +30,8 @@ public class TvService extends AccessibilityService {
     static volatile String lastMsg = "";
     static volatile String lastKey = "";
     static volatile long lastOk = 0;
+    static volatile long beat = 0;                 // moi lan vong lap Firebase "con song" (elapsedRealtime)
+    static volatile TvService inst;
     static volatile String powerMsg = "";   // ket qua lan tat nguon / kiem tra ADB gan nhat
 
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -53,9 +55,8 @@ public class TvService extends AccessibilityService {
         if (android.os.SystemClock.elapsedRealtime() < 10 * 60 * 1000L) Cfg.autoLaunch(this, false);
         Cfg.selfGrant(this);
         // moi lan ket noi tao 1 vong lap moi, vong lap cu (neu con) tu thoat -> khong bao gio chay 2 vong cung luc
-        final int my = gen.incrementAndGet();
-        running = true;
-        new Thread(() -> loop(my), "tvguard").start();
+        inst = this;
+        restartLoop();
     }
 
     // Chan tre mo Cai dat / go cai dat de tat dich vu (tru khi phu huynh cho phep tam thoi)
@@ -95,6 +96,7 @@ public class TvService extends AccessibilityService {
 
     @Override
     public void onDestroy() {
+        if (inst == this) inst = null;
         running = false;
         connected = false;
         gen.incrementAndGet();
@@ -103,6 +105,7 @@ public class TvService extends AccessibilityService {
 
     @Override
     public boolean onUnbind(Intent i) {
+        if (inst == this) inst = null;
         running = false;
         gen.incrementAndGet();
         connected = false;
@@ -111,10 +114,19 @@ public class TvService extends AccessibilityService {
     }
 
     // ---------- vong lap nen: hoi lenh tu Firebase moi 2 giay ----------
+    // Tao vong lap moi (vong cu, neu con, tu thoat o lan lap sau). Dung khi vong lap bi treo hoac TV vua bat lai.
+    void restartLoop() {
+        final int my = gen.incrementAndGet();
+        running = true;
+        beat = android.os.SystemClock.elapsedRealtime();
+        new Thread(() -> loop(my), "tvguard").start();
+    }
+
     private void loop(final int my) {
         int tick = 0;
         while (running && gen.get() == my) {
             SharedPreferences sp = Cfg.sp(this);
+            beat = android.os.SystemClock.elapsedRealtime();
             try {
                 // Hen gio chay cuc bo, khong phu thuoc mang (rut day mang van bi khoa)
                 checkTimer(sp);
@@ -133,6 +145,7 @@ public class TvService extends AccessibilityService {
                         }
                     }
                     checkTimer(sp);
+                    beat = android.os.SystemClock.elapsedRealtime();
                     if (tick % 3 == 0) pushStatus(base, sp);
                     lastMsg = "Kết nối OK";
                     lastOk = System.currentTimeMillis();

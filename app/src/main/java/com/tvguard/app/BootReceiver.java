@@ -13,6 +13,7 @@ public class BootReceiver extends BroadcastReceiver {
         String a = i == null ? "" : String.valueOf(i.getAction());
         boolean watchdog = KeepService.ACTION_WATCHDOG.equals(a);
         if (!watchdog) Cfg.log(c, "Nhận broadcast " + a);
+        if (watchdog && !TvService.connected) Cfg.log(c, "Canh gác 60s: dịch vụ trợ năng CHƯA kết nối");
         Cfg.recover(c, watchdog ? "watchdog" : a);
         if (watchdog) {
             KeepService.scheduleWatchdog(c);   // bao thuc chi chay 1 lan -> tu dat lai

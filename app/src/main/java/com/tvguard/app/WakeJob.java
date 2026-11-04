@@ -43,7 +43,7 @@ public class WakeJob extends JobService {
     public boolean onStartJob(JobParameters p) {
         try {
             if ("tv".equals(Cfg.role(this))) {
-                Cfg.log(this, "Job nền chạy (dịch vụ " + (TvService.connected ? "đang chạy" : "CHƯA chạy") + ")");
+                if (!TvService.connected) Cfg.log(this, "Job nền chạy: dịch vụ trợ năng CHƯA kết nối");
                 Cfg.recover(this, "job");
                 // Tien trinh vua duoc job danh thuc ngay sau khi bat may (<10 phut) -> mo app thu nho
                 if (android.os.SystemClock.elapsedRealtime() < 10 * 60 * 1000L) Cfg.autoLaunch(this, false);
