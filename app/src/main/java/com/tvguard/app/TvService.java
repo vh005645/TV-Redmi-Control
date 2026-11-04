@@ -81,11 +81,6 @@ public class TvService extends AccessibilityService {
         lastVoice = now;
         Cfg.log(this, "Trợ lý giọng nói hiện (" + VOICE_PKG + ") -> khôi phục");
         Cfg.recover(this, "voice");
-        // mo app thu nho toi da 1 lan/10 phut de khong lam gian doan khi tre dung giong noi
-        if (lastVoiceLaunch == 0 || now - lastVoiceLaunch > 10 * 60000L) {
-            lastVoiceLaunch = now;
-            Cfg.autoLaunch(this, false);
-        }
     }
 
     private boolean isProtected(String p) {
@@ -324,6 +319,7 @@ public class TvService extends AccessibilityService {
             if ("shutdown".equals(mode)) maybeShutdown();
         } else {
             shutdownDue = 0;
+            if (Cfg.poweringOff) return;     // dang tat nguon: giu lop khoa den khi TV tat (tranh nhay hinh)
             if (lockView != null) {
                 hideLock();
                 mute(false);
@@ -346,6 +342,19 @@ public class TvService extends AccessibilityService {
     // Cach 2 (du phong, neu TV van con bat sau 15 giay hoac ADB loi): khoa man hinh / dua TV vao che do cho.
     private void powerOff() {
         boolean sent = false;
+        // Mo khoa che do "Tat nguon" TRUOC khi tat, va bao trang thai "da mo khoa" len Firebase
+        final boolean cleared = Cfg.clearShutdownLock(this);
+        if (cleared) {
+            try {
+                Thread t = new Thread(() -> {
+                    try {
+                        if (Cfg.urlOk(this)) pushStatus(Cfg.dbUrl(this) + "/tv/" + Cfg.tvCode(this), Cfg.sp(this));
+                    } catch (Exception e) { }
+                }, "tvguard-lastpush");
+                t.start();
+                t.join(3000);
+            } catch (Exception e) { }
+        }
         try {
             AdbLocal.exec(getFilesDir(), 5555, "reboot -p || input keyevent 26");
             Cfg.sp(this).edit().putBoolean("adbOk", true).apply();
@@ -357,6 +366,8 @@ public class TvService extends AccessibilityService {
         if (sent) {
             try { Thread.sleep(15000); } catch (InterruptedException ie) { return; }
         }
+        // TV van chay -> tat nguon that bai: dat lai khoa de thu lai
+        if (cleared) Cfg.restoreShutdownLock(this);
         ui.post(() -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN));
     }
 

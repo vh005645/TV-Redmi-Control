@@ -18,7 +18,13 @@ public class TvActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     private TextView info, urlTv, codeTv;
     private EditText urlEt, codeEt;
-    private Button saveBtn, codeSaveBtn, iconBtn;
+    private Button saveBtn, codeSaveBtn, iconBtn, forceBtn;
+
+    private void refreshForceBtn() {
+        forceBtn.setText(Cfg.forceOffEnabled(this)
+                ? "Nút nguồn điều khiển = TẮT NGUỒN THẬT: đang BẬT (bấm để tắt)"
+                : "Nút nguồn điều khiển = TẮT NGUỒN THẬT: đang TẮT (bấm để bật)");
+    }
     private ScrollView sv;
     static volatile boolean visible = false;
     static volatile long createdAt = 0;
@@ -200,6 +206,17 @@ public class TvActivity extends Activity {
         pw.setOnClickListener(v -> checkPower());
         l.addView(pw);
 
+        forceBtn = new Button(this);
+        forceBtn.setAllCaps(false);
+        forceBtn.setOnClickListener(v -> {
+            boolean on = !Cfg.forceOffEnabled(this);
+            Cfg.sp(this).edit().putBoolean("forceOff", on).apply();
+            if (on) Cfg.startWatcher(this, true); else Cfg.stopWatcher(this);
+            refreshForceBtn();
+        });
+        l.addView(forceBtn);
+        refreshForceBtn();
+
         iconBtn = new Button(this);
         iconBtn.setAllCaps(false);
         iconBtn.setOnClickListener(v -> {
@@ -243,6 +260,7 @@ public class TvActivity extends Activity {
                 AdbLocal.exec(getFilesDir(), 5555, "echo tvguard_ok");
                 Cfg.sp(this).edit().putBoolean("adbOk", true).apply();
                 Cfg.selfGrant(this);
+                Cfg.startWatcher(this, true);
                 TvService.powerMsg = "SẴN SÀNG - app có quyền tắt nguồn TV [" + AdbLocal.lastKeyInfo + "]";
             } catch (Exception e) {
                 TvService.powerMsg = "Chưa được: " + AdbLocal.explain(e) + " [" + AdbLocal.lastKeyInfo + "]";

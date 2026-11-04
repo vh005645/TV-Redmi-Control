@@ -1,4 +1,4 @@
-# TV Guard v1.8 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.12 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -89,6 +89,24 @@ Khi TV bật lại, app tự khôi phục và tự mở thu nhỏ qua các đư�
 9. (v1.8) Khi trợ lý giọng nói của TV (`com.xiaomi.voicecontrol`) hiện lên lúc bật TV, dịch vụ Trợ năng coi đó là tín hiệu
    "TV vừa bật": khôi phục ngay và mở app thu nhỏ (tối đa 1 lần/phút khôi phục, 1 lần/10 phút mở app).
    Chỉ có tác dụng khi dịch vụ Trợ năng đã kết nối.
+
+### v1.9 - nguyên nhân thật và cách xử lý
+Redmi nội địa: bấm nút nguồn điều khiển ("Short press the on key" = Screen off) chỉ tắt màn hình, vài phút sau mới tắt hẳn
+và lúc đó HyperOS **buộc dừng (Force stop) mọi app** -> app ở trạng thái "stopped", mất dịch vụ Trợ năng, không nhận BOOT_COMPLETED
+của lần bật sau. Tắt bằng `reboot -p` (nút khóa của app) thì không bị vậy.
+- KeepService nghe SCREEN_OFF: màn hình tắt -> chờ 3 giây -> nếu vẫn tắt thì chạy `reboot -p` (ADB nội bộ). Có nút bật/tắt trong màn hình TV.
+- Trước khi tắt nguồn, nếu đang khóa kiểu "Tắt nguồn" thì app **mở khóa** và đẩy trạng thái lên Firebase; thêm lớp dự phòng:
+  phát hiện TV vừa khởi động lại (boot_count đổi) thì mở khóa + bỏ hẹn giờ đã hết hạn.
+- Đã bỏ: báo thức canh gác 60 giây, job chuỗi 1 phút, tự mở app khi sáng màn hình / hiện trợ lý giọng nói / job nền.
+  App chỉ tự mở thu nhỏ khi TV khởi động (BOOT_COMPLETED / dịch vụ Trợ năng kết nối trong 10 phút đầu) và khi cập nhật app.
+
+### v1.10 - chế độ "Shutdown" của nút nguồn
+Ở chế độ **Shutdown**, bấm nút nguồn là HyperOS buộc dừng mọi app NGAY (không phải vài phút sau), nên code trong app không kịp chạy.
+Vì vậy app đặt một tiến trình **shell** (`assets/tvguardwatch.sh`, chạy qua ADB nội bộ, không thuộc app nên không bị buộc dừng):
+- đọc `getevent`: thấy `KEY_POWER DOWN` -> `reboot -p` ngay;
+- đọc logcat: thấy system_server buộc dừng hàng loạt app (có TV Guard) trong vài giây -> `reboot -p`.
+Nhật ký của bộ canh: `/data/local/tmp/tvguard_watch.log`; app ghi lại 6 dòng cuối vào "Nhật ký khởi động" mỗi lần chạy lại.
+Chế độ "Screen off" vẫn được xử lý bằng SCREEN_OFF trong app (chờ 1 giây). Khóa kiểu "Tắt nguồn" được mở khi TV khởi động lại (boot_count).
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 

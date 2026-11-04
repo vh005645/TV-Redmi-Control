@@ -17,8 +17,8 @@ import android.os.SystemClock;
 
 // Dich vu giu nen (foreground) tren TV:
 //  - giu cho tien trinh app song, tu bat/ep bind lai dich vu Tro nang neu bi tat hoac chua ket noi
-//  - lang nghe su kien MAN HINH BAT (TV vua bat len tu che do cho) -> khoi phuc + mo app thu nho
-//  - dat bao thuc canh gac 60 giay/lan: neu HyperOS giet tien trinh luc TV tat thi bao thuc danh thuc lai
+//  - lang nghe MAN HINH BAT -> tao ket noi Firebase moi (khong mo app)
+//  - nghe SCREEN_OFF (bam nut nguon dieu khien) -> tat nguon that ngay, khong cho HyperOS tre vai phut roi giet app
 public class KeepService extends Service {
     static final String ACTION_WATCHDOG = "com.tvguard.app.WATCHDOG";
     private final Handler h = new Handler(Looper.getMainLooper());
@@ -41,15 +41,17 @@ public class KeepService extends Service {
         }
     };
 
-    // TV vua bat len: man hinh sang / het che do cho / mo khoa
+    // Man hinh sang lai (thoat che do cho): tao ket noi Firebase moi, KHONG mo app (tranh hien len khi dang xem)
     private final BroadcastReceiver wake = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
-            String a = i == null ? "?" : String.valueOf(i.getAction());
-            Cfg.log(c, "TV bật lại (" + a.replace("android.intent.action.", "") + "), dịch vụ " + (TvService.connected ? "đang kết nối" : "CHƯA kết nối"));
-            Cfg.recover(c, a);
+            String a = i == null ? "" : String.valueOf(i.getAction());
+            if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                // Bam nut nguon tren dieu khien -> man hinh tat. Doi 1 giay roi tat nguon that, khong de TV cho vai phut
+                h.postDelayed(() -> Cfg.forcePowerOff(KeepService.this), 1000);
+                return;
+            }
             TvService s = TvService.inst;
-            if (s != null && TvService.connected) s.restartLoop();   // ket noi mang moi sau khi thoat che do cho
-            Cfg.autoLaunch(c, false);
+            if (s != null && TvService.connected) s.restartLoop();
         }
     };
 
@@ -60,13 +62,13 @@ public class KeepService extends Service {
         } catch (Exception e) { }
     }
 
-    // Bao thuc lap lai 60 giay: song sot qua viec tien trinh bi giet (khong song sot qua khoi dong lai may -> WakeJob/BootReceiver lo)
-    static void scheduleWatchdog(Context c) {
+    // Huy bao thuc canh gac 60 giay cua cac ban truoc (da bo vi chi gay phien, nguyen nhan that la HyperOS giet app luc TV cho)
+    static void cancelWatchdog(Context c) {
         try {
             AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
             Intent in = new Intent(c, BootReceiver.class).setAction(ACTION_WATCHDOG);
-            PendingIntent pi = PendingIntent.getBroadcast(c, 77, in, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + 60000L, pi);
+            PendingIntent pi = PendingIntent.getBroadcast(c, 77, in, PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+            if (pi != null) { am.cancel(pi); pi.cancel(); }
         } catch (Exception e) { }
     }
 
@@ -88,9 +90,7 @@ public class KeepService extends Service {
             try {
                 IntentFilter f = new IntentFilter();
                 f.addAction(Intent.ACTION_SCREEN_ON);
-                f.addAction(Intent.ACTION_USER_PRESENT);
-                f.addAction(Intent.ACTION_DREAMING_STOPPED);
-                f.addAction(Intent.ACTION_POWER_CONNECTED);
+                f.addAction(Intent.ACTION_SCREEN_OFF);
                 registerReceiver(wake, f);
                 receiverOn = true;
             } catch (Exception e) { }
@@ -99,7 +99,7 @@ public class KeepService extends Service {
             watching = true;
             h.post(watch);
         }
-        scheduleWatchdog(this);
+        cancelWatchdog(this);
         return START_STICKY;
     }
 

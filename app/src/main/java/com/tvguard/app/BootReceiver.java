@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-// Nhan: khoi dong may / cap nhat app / doi gio (TV vua co mang) / bao thuc canh gac 60 giay.
+// Nhan: khoi dong may / cap nhat app / doi gio (TV vua co mang).
 // Moi lan nhan deu khoi phuc dich vu; khoi dong may va cap nhat app con tu mo app o che do thu nho.
 public class BootReceiver extends BroadcastReceiver {
     @Override
@@ -13,12 +13,8 @@ public class BootReceiver extends BroadcastReceiver {
         String a = i == null ? "" : String.valueOf(i.getAction());
         boolean watchdog = KeepService.ACTION_WATCHDOG.equals(a);
         if (!watchdog) Cfg.log(c, "Nhận broadcast " + a);
-        if (watchdog && !TvService.connected) Cfg.log(c, "Canh gác 60s: dịch vụ trợ năng CHƯA kết nối");
-        Cfg.recover(c, watchdog ? "watchdog" : a);
-        if (watchdog) {
-            KeepService.scheduleWatchdog(c);   // bao thuc chi chay 1 lan -> tu dat lai
-            return;
-        }
+        if (watchdog) { KeepService.cancelWatchdog(c); return; }   // bao thuc cu cua ban truoc: khong dat lai nua
+        Cfg.recover(c, a);
         boolean boot = Intent.ACTION_BOOT_COMPLETED.equals(a)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a)
                 || "com.htc.intent.action.QUICKBOOT_POWERON".equals(a);

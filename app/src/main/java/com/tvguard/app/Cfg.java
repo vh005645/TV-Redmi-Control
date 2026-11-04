@@ -196,6 +196,130 @@ public class Cfg {
 
     static String bootLog(Context c) { return sp(c).getString("bootlog", ""); }
 
+    // ---------- khoa che do "Tat nguon" khong duoc luu qua lan tat nguon ----------
+    static volatile boolean poweringOff = false;   // dang tat nguon: khong go lop khoa (tranh nhay hinh)
+
+    // Truoc khi TV tat nguon: neu dang khoa kieu "shutdown" thi mo khoa luon de lan bat sau khong tu tat tiep
+    static synchronized boolean clearShutdownLock(Context c) {
+        try {
+            SharedPreferences sp = sp(c);
+            if (!sp.getBoolean("locked", false) || !"shutdown".equals(TvService.normMode(sp.getString("mode", "black")))) return false;
+            poweringOff = true;
+            sp.edit().putBoolean("locked", false).putLong("endAt", 0).commit();
+            log(c, "Tắt nguồn: đã mở khóa chế độ Tắt nguồn để lần bật sau không tắt tiếp");
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    // Tat nguon that bai (TV van bat): dat lai khoa nhu cu
+    static synchronized void restoreShutdownLock(Context c) {
+        sp(c).edit().putBoolean("locked", true).putLong("endAt", 0).commit();
+        poweringOff = false;
+    }
+
+    // Phat hien TV vua KHOI DONG LAI (boot_count doi): mo khoa kieu shutdown + bo hen gio da het han,
+    // phong truong hop mat dien / tat bang cach khac nen khong kip mo khoa luc tat.
+    static void checkNewBoot(Context c) {
+        try {
+            int bc = Settings.Global.getInt(c.getContentResolver(), "boot_count", -1);
+            if (bc < 0) return;
+            SharedPreferences sp = sp(c);
+            int old = sp.getInt("bootCount", -1);
+            if (old == bc) return;
+            sp.edit().putInt("bootCount", bc).commit();
+            if (old < 0) return;
+            if (!"shutdown".equals(TvService.normMode(sp.getString("mode", "black")))) return;
+            boolean changed = false;
+            SharedPreferences.Editor ed = sp.edit();
+            if (sp.getBoolean("locked", false)) { ed.putBoolean("locked", false); changed = true; }
+            long end = sp.getLong("endAt", 0);
+            if (end > 0 && end <= System.currentTimeMillis()) { ed.putLong("endAt", 0); changed = true; }
+            if (changed) { ed.commit(); log(c, "TV vừa khởi động lại: đã mở khóa chế độ Tắt nguồn"); }
+        } catch (Exception e) { }
+    }
+
+    // Nut nguon tren dieu khien chi tat MAN HINH roi cho vai phut moi tat that (va giet het app luc do).
+    // Che do "Screen off": thay man hinh tat -> doi 1 giay -> neu man hinh van tat thi tat nguon that ngay bang ADB noi bo.
+    static boolean forceOffEnabled(Context c) { return sp(c).getBoolean("forceOff", true); }
+
+    static void forcePowerOff(final Context c) {
+        if (!"tv".equals(role(c)) || !forceOffEnabled(c)) return;
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            if (pm != null && pm.isInteractive()) return;          // man hinh da sang lai
+        } catch (Exception e) { }
+        if (poweringOff) return;
+        poweringOff = true;
+        log(c, "Nút nguồn: màn hình tắt -> tắt nguồn thật bằng ADB nội bộ");
+        new Thread(() -> {
+            boolean cleared = clearShutdownLock(c);
+            try {
+                AdbLocal.exec(c.getFilesDir(), 5555, "reboot -p");
+                sp(c).edit().putBoolean("adbOk", true).apply();
+                Thread.sleep(20000);                                // neu den day TV van chay -> that bai
+                log(c, "Tắt nguồn thật: lệnh đã gửi nhưng TV vẫn chạy");
+            } catch (Exception e) {
+                log(c, "Tắt nguồn thật lỗi: " + AdbLocal.explain(e));
+            }
+            if (cleared) restoreShutdownLock(c);
+            poweringOff = false;
+        }, "tvguard-forceoff").start();
+    }
+
+    // ---------- bo canh nut nguon (chay trong shell, song sot khi HyperOS giet het app) ----------
+    // Che do "Shutdown" cua Redmi: bam nut nguon -> HyperOS buoc dung MOI app ngay lap tuc -> app khong con cach nao tu phan ung.
+    // Nen dat 1 tien trinh shell (khong thuoc app) canh phim nguon / dau hieu "dong tat ca chuong trinh" va chay "reboot -p".
+    static volatile boolean watcherStarted = false;
+    private static final String WATCH_PATH = "/data/local/tmp/tvguardwatch.sh";
+    private static final String WATCH_LOG = "/data/local/tmp/tvguard_watch.log";
+
+    static void startWatcher(final Context c, boolean force) {
+        if (!"tv".equals(role(c)) || !forceOffEnabled(c) || !sp(c).getBoolean("adbOk", false)) return;
+        if (watcherStarted && !force) return;
+        watcherStarted = true;
+        final Context app = c.getApplicationContext();
+        new Thread(() -> {
+            for (int i = 0; i < 6; i++) {
+                try {
+                    java.io.File dir = app.getFilesDir();
+                    // ket qua lan chay truoc (cho biet nut nguon / dong hang loat co kich hoat duoc khong)
+                    String prev = AdbLocal.exec(dir, 5555, "tail -n 14 " + WATCH_LOG + " 2>/dev/null");
+                    if (prev != null && !prev.trim().isEmpty())
+                        log(app, "Bộ canh nút nguồn (lần trước): " + prev.trim().replace("\n", " | "));
+                    AdbLocal.exec(dir, 5555, "pkill -f 'tvguardwatc[h]'; pkill -x getevent; echo ok");
+                    String script = readAsset(app, "tvguardwatch.sh");
+                    AdbLocal.exec(dir, 5555, "cat > " + WATCH_PATH + " <<'EOF'\n" + script + "\nEOF\n"
+                            + "chmod 755 " + WATCH_PATH + "; S=''; command -v setsid >/dev/null 2>&1 && S=setsid; "
+                            + "$S nohup sh " + WATCH_PATH + " >/dev/null 2>&1 </dev/null & echo started");
+                    log(app, "Bộ canh nút nguồn (shell) đã chạy");
+                    return;
+                } catch (Exception e) {
+                    log(app, "Bộ canh nút nguồn lỗi (" + (i + 1) + "/6): " + AdbLocal.explain(e));
+                    try { Thread.sleep(10000); } catch (InterruptedException ie) { break; }
+                }
+            }
+            watcherStarted = false;
+        }, "tvguard-watcher").start();
+    }
+
+    static void stopWatcher(final Context c) {
+        final Context app = c.getApplicationContext();
+        watcherStarted = false;
+        new Thread(() -> {
+            try { AdbLocal.exec(app.getFilesDir(), 5555, "pkill -f 'tvguardwatc[h]'; pkill -x getevent; echo ok"); } catch (Exception e) { }
+        }, "tvguard-watcher-stop").start();
+    }
+
+    private static String readAsset(Context c, String name) throws Exception {
+        java.io.InputStream in = c.getAssets().open(name);
+        java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+        byte[] b = new byte[4096];
+        int n;
+        while ((n = in.read(b)) > 0) o.write(b, 0, n);
+        in.close();
+        return new String(o.toByteArray(), "UTF-8");
+    }
+
     // ---------- khoi phuc khi bat TV ----------
     static final long PROC_START = SystemClock.elapsedRealtime();
     private static long lastRebind = 0;
@@ -232,11 +356,12 @@ public class Cfg {
     static void recover(Context c, String why) {
         if (!"tv".equals(role(c))) return;
         WakeJob.schedule(c);
-        KeepService.scheduleWatchdog(c);
+        KeepService.cancelWatchdog(c);          // bao thuc 60s cua ban cu (da bo)
         enableService(c);
         ensureService(c);
         KeepService.start(c);
         selfGrant(c);
+        startWatcher(c, false);
     }
 
     // Mo TvActivity o che do thu nho (tu quay ve nen). Chong mo lien tuc bang cooldown 60 giay.

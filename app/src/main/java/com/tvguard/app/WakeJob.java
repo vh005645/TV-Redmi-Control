@@ -8,8 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 
 // Job duoc he thong JobScheduler giu lai sau khi khoi dong lai may. Neu HyperOS khong gui BOOT_COMPLETED,
-// job nay van danh thuc app: (1) job dinh ky 15 phut, (2) job 1 lan "chuoi" tu dat lai sau ~1 phut moi lan chay,
-// co rang buoc mang nen chay ngay khi TV vua co mang sau khi bat.
+// job nay (dinh ky 15 phut, chay ngam, khong hien gi len man hinh) van danh thuc app.
 public class WakeJob extends JobService {
     private static final int JOB_PERIODIC = 4711;
     private static final int JOB_CHAIN = 4712;
@@ -24,18 +23,7 @@ public class WakeJob extends JobService {
                         .setPeriodic(15 * 60 * 1000L)
                         .build());
             }
-            if (js.getPendingJob(JOB_CHAIN) == null) scheduleChain(c, js);
-        } catch (Exception e) { }
-    }
-
-    private static void scheduleChain(Context c, JobScheduler js) {
-        try {
-            js.schedule(new JobInfo.Builder(JOB_CHAIN, new ComponentName(c, WakeJob.class))
-                    .setPersisted(true)
-                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                    .setMinimumLatency(60 * 1000L)
-                    .setOverrideDeadline(3 * 60 * 1000L)
-                    .build());
+            js.cancel(JOB_CHAIN);      // job chuoi 1 phut cua ban cu (da bo)
         } catch (Exception e) { }
     }
 
@@ -45,12 +33,6 @@ public class WakeJob extends JobService {
             if ("tv".equals(Cfg.role(this))) {
                 if (!TvService.connected) Cfg.log(this, "Job nền chạy: dịch vụ trợ năng CHƯA kết nối");
                 Cfg.recover(this, "job");
-                // Tien trinh vua duoc job danh thuc ngay sau khi bat may (<10 phut) -> mo app thu nho
-                if (android.os.SystemClock.elapsedRealtime() < 10 * 60 * 1000L) Cfg.autoLaunch(this, false);
-            }
-            if (p.getJobId() == JOB_CHAIN) {
-                JobScheduler js = (JobScheduler) getSystemService(Context.JOB_SCHEDULER_SERVICE);
-                if (js != null) scheduleChain(this, js);   // tu dat lai de chuoi khong dut
             }
         } catch (Exception e) { }
         return false;

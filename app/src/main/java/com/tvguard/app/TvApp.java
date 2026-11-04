@@ -10,6 +10,7 @@ public class TvApp extends Application {
         super.onCreate();
         try {
             if (!"tv".equals(Cfg.role(this))) return;
+            Cfg.checkNewBoot(this);
             Cfg.logExitReasons(this);
             Cfg.log(this, "Tiến trình app khởi động");
             Cfg.recover(this, "process");
