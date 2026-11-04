@@ -29,10 +29,12 @@ public class TvService extends AccessibilityService {
     static volatile boolean connected = false;
     static volatile String lastMsg = "";
     static volatile String lastKey = "";
+    static volatile long lastOk = 0;
     static volatile String powerMsg = "";   // ket qua lan tat nguon / kiem tra ADB gan nhat
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private volatile boolean running = false;
+    private final java.util.concurrent.atomic.AtomicInteger gen = new java.util.concurrent.atomic.AtomicInteger();
     private WindowManager wm;
     private View lockView, imgView;
     private String shownMode = "";
@@ -47,12 +49,13 @@ public class TvService extends AccessibilityService {
         connected = true;
         Cfg.log(this, "Dịch vụ trợ năng đã kết nối");
         KeepService.start(this);
-        // Vua bat TV: dich vu duoc he thong bat -> tu mo app o che do thu nho
-        Cfg.autoLaunch(this, false);
-        if (!running) {
-            running = true;
-            new Thread(this::loop, "tvguard").start();
-        }
+        // Vua bat TV (may moi khoi dong < 10 phut): dich vu duoc he thong bat -> tu mo app o che do thu nho
+        if (android.os.SystemClock.elapsedRealtime() < 10 * 60 * 1000L) Cfg.autoLaunch(this, false);
+        Cfg.selfGrant(this);
+        // moi lan ket noi tao 1 vong lap moi, vong lap cu (neu con) tu thoat -> khong bao gio chay 2 vong cung luc
+        final int my = gen.incrementAndGet();
+        running = true;
+        new Thread(() -> loop(my), "tvguard").start();
     }
 
     // Chan tre mo Cai dat / go cai dat de tat dich vu (tru khi phu huynh cho phep tam thoi)
@@ -91,17 +94,26 @@ public class TvService extends AccessibilityService {
     @Override public void onInterrupt() { }
 
     @Override
+    public void onDestroy() {
+        running = false;
+        connected = false;
+        gen.incrementAndGet();
+        super.onDestroy();
+    }
+
+    @Override
     public boolean onUnbind(Intent i) {
         running = false;
+        gen.incrementAndGet();
         connected = false;
         ui.post(() -> { hideLock(); hideImage(); });
         return super.onUnbind(i);
     }
 
     // ---------- vong lap nen: hoi lenh tu Firebase moi 2 giay ----------
-    private void loop() {
+    private void loop(final int my) {
         int tick = 0;
-        while (running) {
+        while (running && gen.get() == my) {
             SharedPreferences sp = Cfg.sp(this);
             try {
                 // Hen gio chay cuc bo, khong phu thuoc mang (rut day mang van bi khoa)
@@ -123,6 +135,7 @@ public class TvService extends AccessibilityService {
                     checkTimer(sp);
                     if (tick % 3 == 0) pushStatus(base, sp);
                     lastMsg = "Kết nối OK";
+                    lastOk = System.currentTimeMillis();
                 }
             } catch (Exception e) {
                 lastMsg = "Lỗi: " + Net.explain(e);
@@ -304,6 +317,7 @@ public class TvService extends AccessibilityService {
         boolean sent = false;
         try {
             AdbLocal.exec(getFilesDir(), 5555, "reboot -p || input keyevent 26");
+            Cfg.sp(this).edit().putBoolean("adbOk", true).apply();
             powerMsg = "Đã gửi lệnh tắt nguồn (ADB nội bộ) lúc " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()) + " [" + AdbLocal.lastKeyInfo + "]";
             sent = true;
         } catch (Exception e) {

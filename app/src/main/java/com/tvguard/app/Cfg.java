@@ -142,14 +142,61 @@ public class Cfg {
 
     static String bootLog(Context c) { return sp(c).getString("bootlog", ""); }
 
-    // ---------- tu chay khi bat TV ----------
-    private static boolean launched;
+    // ---------- khoi phuc khi bat TV ----------
+    static final long PROC_START = SystemClock.elapsedRealtime();
+    private static long lastRebind = 0;
+    private static long lastGrant = 0;
+    private static final long LAUNCH_COOLDOWN = 60 * 1000L;
 
-    // Mo TvActivity o che do thu nho (tu quay ve nen). force=true: bo qua gioi han "vua khoi dong"
+    // Dam bao dich vu Tro nang dang BAT va dang KET NOI. Neu da bat trong Settings nhung he thong
+    // chua bind (HyperOS hay lam vay sau khi TV bat lai) thi tat/bat lai de ep he thong bind lai.
+    static synchronized void ensureService(Context c) {
+        if (!"tv".equals(role(c)) || !canWriteSecure(c)) return;
+        try {
+            if (!serviceEnabled(c)) { enableService(c); return; }
+            if (TvService.connected) return;
+            long now = SystemClock.elapsedRealtime();
+            // cho he thong tu bind 20 giay dau sau khi tien trinh khoi dong, roi moi ep; moi lan ep cach nhau >= 30 giay
+            if (now - PROC_START < 20000 || now - lastRebind < 30000) return;
+            lastRebind = now;
+            final String comp = serviceComponent(c);
+            String cur = Settings.Secure.getString(c.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (cur == null) cur = "";
+            StringBuilder b = new StringBuilder();
+            for (String part : cur.split(":")) {
+                if (part.isEmpty() || part.equals(comp)) continue;
+                if (b.length() > 0) b.append(':');
+                b.append(part);
+            }
+            Settings.Secure.putString(c.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, b.toString());
+            final Context app = c.getApplicationContext();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> enableService(app), 800);
+            log(c, "Ép bind lại dịch vụ trợ năng (đã bật nhưng chưa kết nối)");
+        } catch (Exception e) { }
+    }
+
+    // Goi o moi diem vao (boot, man hinh bat, alarm, job, mo app): dam bao moi thu dang chay
+    static void recover(Context c, String why) {
+        if (!"tv".equals(role(c))) return;
+        log(c, "Khôi phục (" + why + ")");
+        WakeJob.schedule(c);
+        KeepService.scheduleWatchdog(c);
+        enableService(c);
+        ensureService(c);
+        KeepService.start(c);
+        selfGrant(c);
+    }
+
+    // Mo TvActivity o che do thu nho (tu quay ve nen). Chong mo lien tuc bang cooldown 60 giay.
     static synchronized void autoLaunch(Context c, boolean force) {
         if (!"tv".equals(role(c))) return;
-        if (!force && (launched || SystemClock.elapsedRealtime() > 10 * 60 * 1000L)) return;
-        launched = true;
+        if (TvActivity.visible) return;
+        long now = SystemClock.elapsedRealtime();
+        long last = sp(c).getLong("launchAt", -1);
+        long diff = now - last;
+        if (!force && last >= 0 && diff >= 0 && diff < LAUNCH_COOLDOWN) return;
+        sp(c).edit().putLong("launchAt", now).apply();
+        final long t0 = now;
         try {
             Intent i = new Intent(c, TvActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -159,6 +206,46 @@ public class Cfg {
         } catch (Exception e) {
             log(c, "Tự mở app: LỖI " + e.getClass().getSimpleName());
         }
+        // Neu 5 giay sau app van chua len (HyperOS chan mo tu nen) -> dung ADB noi bo de mo
+        final Context app = c.getApplicationContext();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (TvActivity.createdAt >= t0 || !sp(app).getBoolean("adbOk", false)) return;
+            new Thread(() -> {
+                try {
+                    AdbLocal.exec(app.getFilesDir(), 5555, "am start -n " + app.getPackageName() + "/.MainActivity --ez minimize true");
+                    log(app, "Tự mở app: dùng ADB nội bộ");
+                } catch (Exception e) { log(app, "Tự mở app bằng ADB lỗi"); }
+            }, "tvguard-adbstart").start();
+        }, 5000);
+    }
+
+    // Tu cap lai cac quyen chay nen / tu khoi dong qua ADB noi bo (chi khi da bam "Luon cho phep" 1 lan).
+    // Lenh nao khong co tren ROM thi bo qua, khong anh huong lenh khac.
+    static void selfGrant(Context c) {
+        if (!sp(c).getBoolean("adbOk", false)) return;
+        long now = SystemClock.elapsedRealtime();
+        if (lastGrant != 0 && now - lastGrant < 30 * 60 * 1000L) return;
+        lastGrant = now;
+        final Context app = c.getApplicationContext();
+        final String p = app.getPackageName();
+        final String cmd = "pm grant " + p + " " + WSS + ";"
+                + "appops set " + p + " SYSTEM_ALERT_WINDOW allow;"
+                + "cmd appops set " + p + " RUN_IN_BACKGROUND allow;"
+                + "cmd appops set " + p + " RUN_ANY_IN_BACKGROUND allow;"
+                + "cmd appops set " + p + " AUTO_START allow;"
+                + "cmd appops set " + p + " 10008 allow;"
+                + "cmd appops set " + p + " 10021 allow;"
+                + "cmd deviceidle whitelist +" + p + ";"
+                + "am set-standby-bucket " + p + " active;"
+                + "echo done";
+        new Thread(() -> {
+            try {
+                AdbLocal.exec(app.getFilesDir(), 5555, cmd);
+                log(app, "Tự cấp quyền chạy nền (ADB nội bộ): xong");
+            } catch (Exception e) {
+                log(app, "Tự cấp quyền (ADB nội bộ) lỗi: " + AdbLocal.explain(e));
+            }
+        }, "tvguard-grant").start();
     }
 
     // ---------- an app ----------

@@ -20,13 +20,15 @@ public class TvActivity extends Activity {
     private EditText urlEt, codeEt;
     private Button saveBtn, codeSaveBtn, iconBtn;
     private ScrollView sv;
+    static volatile boolean visible = false;
+    static volatile long createdAt = 0;
     private boolean alive;
     private volatile boolean checking;
 
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             if (!alive) return;
-            if (!Cfg.serviceEnabled(TvActivity.this)) Cfg.enableService(TvActivity.this);
+            Cfg.ensureService(TvActivity.this);
             info.setText(build());
             h.postDelayed(this, 2000);
         }
@@ -75,12 +77,12 @@ public class TvActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        createdAt = android.os.SystemClock.elapsedRealtime();
         Cfg.hideFromRecents(this, true);
         Cfg.log(this, "Mở app" + (getIntent() != null && getIntent().getBooleanExtra("minimize", false) ? " (tự động)" : " (thủ công)")
                 + ": trợ năng " + (Cfg.serviceEnabled(this) ? "đang bật" : "ĐANG TẮT")
                 + ", dịch vụ " + (TvService.connected ? "đã kết nối" : "CHƯA kết nối"));
-        WakeJob.schedule(this);
-        KeepService.start(this);
+        Cfg.recover(this, "mở app");
         sv = new ScrollView(this);
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
@@ -239,6 +241,8 @@ public class TvActivity extends Activity {
         new Thread(() -> {
             try {
                 AdbLocal.exec(getFilesDir(), 5555, "echo tvguard_ok");
+                Cfg.sp(this).edit().putBoolean("adbOk", true).apply();
+                Cfg.selfGrant(this);
                 TvService.powerMsg = "SẴN SÀNG - app có quyền tắt nguồn TV [" + AdbLocal.lastKeyInfo + "]";
             } catch (Exception e) {
                 TvService.powerMsg = "Chưa được: " + AdbLocal.explain(e) + " [" + AdbLocal.lastKeyInfo + "]";
@@ -270,6 +274,6 @@ public class TvActivity extends Activity {
     // Phim Back chi thu nho app, khong thoat han (thoat han co the lam mat dich vu tren MIUI)
     @Override public void onBackPressed() { moveTaskToBack(true); }
 
-    @Override protected void onResume() { super.onResume(); alive = true; h.post(refresh); }
-    @Override protected void onPause() { super.onPause(); alive = false; }
+    @Override protected void onResume() { super.onResume(); visible = true; alive = true; h.post(refresh); }
+    @Override protected void onPause() { super.onPause(); visible = false; alive = false; }
 }

@@ -28,7 +28,14 @@ public class MainActivity extends Activity {
             }
         }
         String r = Cfg.role(this);
-        if ("tv".equals(r)) { Cfg.hideFromRecents(this, true); startActivity(new Intent(this, TvActivity.class)); finish(); return; }
+        if ("tv".equals(r)) {
+            Cfg.hideFromRecents(this, true);
+            Intent ti = new Intent(this, TvActivity.class);
+            if (it != null && it.getBooleanExtra("minimize", false)) ti.putExtra("minimize", true);
+            startActivity(ti);
+            finish();
+            return;
+        }
         if ("parent".equals(r)) { startActivity(new Intent(this, ParentActivity.class)); finish(); return; }
 
         LinearLayout l = new LinearLayout(this);

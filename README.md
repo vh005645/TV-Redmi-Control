@@ -1,4 +1,4 @@
-# TV Guard v1.5 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.6 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -68,6 +68,22 @@ và xem nhật ký: nếu không có dòng "Nhận broadcast ...BOOT_COMPLETED" 
 (10008 = tự khởi động, 10021 = mở cửa sổ khi chạy nền, trên MIUI/HyperOS.) Hoặc vào Cài đặt TV > Ứng dụng > TV Guard, bật
 "Tự khởi động"/"Autostart" và đặt pin "Không hạn chế" nếu có. Ngoài ra app có job nền (WakeJob, 15 phút/lần, hệ thống giữ lại sau
 khi khởi động lại) để tự bật lại dịch vụ nếu broadcast bị chặn; job này chạy chậm hơn broadcast.
+
+## Tự chạy khi bật TV (v1.6 - nhiều lớp dự phòng)
+
+Khi TV bật lại, app tự khôi phục và tự mở thu nhỏ qua các đường sau (đường nào chạy trước cũng được):
+
+1. `BOOT_COMPLETED` / `QUICKBOOT_POWERON` / `TIME_SET` (BootReceiver).
+2. Dịch vụ Trợ năng do hệ thống tự bind; nếu đã bật trong Settings mà chưa kết nối thì app **tắt/bật lại** để ép bind (Cfg.ensureService).
+3. KeepService nghe sự kiện **màn hình bật / hết chế độ chờ** (SCREEN_ON, USER_PRESENT...) -> khôi phục + mở app thu nhỏ.
+   (Bản cũ chỉ tự mở trong 10 phút đầu sau khi bật máy và chỉ 1 lần/tiến trình nên TV thoát chế độ chờ không mở lại được.)
+4. Báo thức canh gác 60 giây/lần: tiến trình bị HyperOS giết lúc TV tắt thì báo thức đánh thức lại.
+5. WakeJob: job định kỳ 15 phút + job "chuỗi" có ràng buộc mạng, được hệ thống giữ lại sau khi khởi động lại.
+6. Nếu mở app từ nền bị HyperOS chặn: app dùng ADB nội bộ chạy `am start ... --ez minimize true`.
+7. Tự cấp lại quyền chạy nền qua ADB nội bộ (autostart 10008/10021, SYSTEM_ALERT_WINDOW, deviceidle, standby-bucket)
+   sau khi bạn đã bấm "Kiểm tra quyền tắt nguồn" + "Luôn cho phép" 1 lần.
+
+Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 
 ## Tắt nguồn TV khi hết giờ (shutdown)
 
