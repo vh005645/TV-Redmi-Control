@@ -1,4 +1,4 @@
-# ver 3
+# ver 4
 # TV Guard - bo canh (chay bang quyen shell, KHONG bi HyperOS giet khi no "dong tat ca chuong trinh")
 # Nhat ky: /data/local/tmp/tvguard_watch.log
 LOG=/data/local/tmp/tvguard_watch.log
@@ -10,7 +10,30 @@ SS=$(pidof system_server)
 ST=$(date +%s)
 k=0; bk=0; bt=0
 rm -f $F $K
-echo "$(date +%T) bat dau canh v3 (system_server=$SS)" > $LOG
+echo "$(date +%T) bat dau canh v4 (system_server=$SS)" > $LOG
+
+# Khi he thong buoc dung app, Android GO dich vu Tro nang cua app khoi danh sach da bat -> luc bat TV lai khong ai bind duoc.
+# Bo canh (khong bi buoc dung) ghi lai ngay vao danh sach, khong can app.
+AS_COMP="$APP/$APP.TvService"
+NL_COMP="$APP/$APP.KeepListener"
+add_comp() {   # $1 = ten khoa cai dat, $2 = thanh phan
+  cur=$(settings get secure $1 2>/dev/null)
+  case "$cur" in
+    *"$2"*) return 1;;
+  esac
+  if [ -z "$cur" ] || [ "$cur" = "null" ]; then new="$2"; else new="$cur:$2"; fi
+  settings put secure $1 "$new" 2>/dev/null
+  return 0
+}
+restore() {
+  fixed=0
+  add_comp enabled_accessibility_services "$AS_COMP" && fixed=1
+  add_comp enabled_notification_listeners "$NL_COMP" && fixed=1
+  if [ $fixed = 1 ]; then
+    settings put secure accessibility_enabled 1 2>/dev/null
+    echo "$(date +%T) da bat lai Tro nang/thong bao trong danh sach he thong" >> $LOG
+  fi
+}
 
 # Mo lai app: go trang thai "stopped" sau khi bi buoc dung + khoi dong lai tien trinh (app tu bat lai Tro nang, ket noi Firebase)
 relaunch() {
@@ -45,6 +68,14 @@ getevent -l 2>/dev/null | while read -r l; do
   esac
 done &
 
+# Canh danh sach 8 giay/lan: mat TV Guard (buoc dung luc tat TV, bam Back/Home...) thi ghi lai ngay
+(
+  while true; do
+    sleep 8
+    restore
+  done
+) &
+
 # Nguon 2: he thong buoc dung TV Guard (system_server) = HyperOS "dong tat ca chuong trinh" khi bam nut nguon (che do Shutdown)
 #   - neu ngay truoc do co bam Back/Home lien tuc (>=2 lan) -> tre dang pha khoa: chi MO LAI app, khong tat TV
 #   - neu vua cap quyen bang ADB (30 giay) -> chi mo lai app
@@ -56,6 +87,7 @@ if [ -n "$SS" ]; then
         now=$(date +%s)
         if [ $((now - ST)) -lt 3 ]; then continue; fi
         echo "$(date +%T) dong app: $l" >> $LOG
+        ( restore; sleep 1; restore; sleep 2; restore ) &
         spam=0
         if [ -r $K ]; then
           set -- $(cat $K)

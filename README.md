@@ -1,4 +1,4 @@
-# TV Guard v1.13 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.14 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -114,6 +114,12 @@ Chế độ "Screen off" vẫn được xử lý bằng SCREEN_OFF trong app (ch
   mở lại app (gỡ trạng thái "stopped" để lần bật sau nhận BOOT_COMPLETED) rồi `reboot -p` sau 3 giây.
 - Nếu ngay trước đó có bấm Back/Home liên tục (>=2 lần trong 8 giây) hoặc vừa tự cấp quyền (30 giây): chỉ MỞ LẠI app, không tắt TV.
 - Tên gói trợ lý giọng nói: com.xiaomi.mitv.voicecontrol.
+
+### v1.14
+Mỗi lần TV tắt, system_server buộc dừng (Force stop) TV Guard; Android khi đó **gỡ dịch vụ Trợ năng của app khỏi danh sách đã bật**
+nên lần bật sau hệ thống không bind nó. Bộ canh shell (ver 4) giờ tự ghi lại TvService / KeepListener vào
+`enabled_accessibility_services` / `enabled_notification_listeners` ngay khi thấy dòng "Force stopping com.tvguard.app" (và 1s, 3s sau đó),
+đồng thời quét 8 giây/lần. Nhật ký bộ canh: dòng "da bat lai Tro nang/thong bao trong danh sach he thong".
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 

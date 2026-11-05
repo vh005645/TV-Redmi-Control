@@ -272,7 +272,7 @@ public class Cfg {
     static volatile boolean watcherStarted = false;
     private static final String WATCH_PATH = "/data/local/tmp/tvguardwatch.sh";
     private static final String WATCH_LOG = "/data/local/tmp/tvguard_watch.log";
-    private static final String WATCH_VER = "3";       // phai khop dong dau "# ver N" cua assets/tvguardwatch.sh
+    private static final String WATCH_VER = "4";       // phai khop dong dau "# ver N" cua assets/tvguardwatch.sh
 
     static void startWatcher(final Context c, boolean force) {
         if (!"tv".equals(role(c)) || !forceOffEnabled(c) || !sp(c).getBoolean("adbOk", false)) return;
