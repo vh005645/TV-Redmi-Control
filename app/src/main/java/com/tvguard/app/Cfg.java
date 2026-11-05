@@ -373,6 +373,8 @@ public class Cfg {
     // Mo TvActivity o che do thu nho (tu quay ve nen). Chong mo lien tuc bang cooldown 60 giay.
     static synchronized void autoLaunch(Context c, boolean force) {
         if (!"tv".equals(role(c))) return;
+        // Mac dinh KHONG tu hien giao dien luc bat TV (HomeShim da khoi dong app). Bat lai: sp "showOnBoot" = true.
+        if (!sp(c).getBoolean("showOnBoot", false)) return;
         if (TvActivity.visible) return;
         long now = SystemClock.elapsedRealtime();
         long last = sp(c).getLong("launchAt", -1);
