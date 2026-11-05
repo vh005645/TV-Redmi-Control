@@ -1,4 +1,4 @@
-# TV Guard v1.14 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.15 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -120,6 +120,13 @@ Mỗi lần TV tắt, system_server buộc dừng (Force stop) TV Guard; Android
 nên lần bật sau hệ thống không bind nó. Bộ canh shell (ver 4) giờ tự ghi lại TvService / KeepListener vào
 `enabled_accessibility_services` / `enabled_notification_listeners` ngay khi thấy dòng "Force stopping com.tvguard.app" (và 1s, 3s sau đó),
 đồng thời quét 8 giây/lần. Nhật ký bộ canh: dòng "da bat lai Tro nang/thong bao trong danh sach he thong".
+
+### v1.15 - HomeShim (launcher trung gian)
+App Drawer (`tungbui.drawer`) là launcher mặc định; hệ thống tự khởi động launcher mặc định mỗi lần bật TV (không bị chặn tự khởi động).
+`HomeShim` là một Activity HOME trong suốt: chạy `Cfg.recover` rồi mở ngay launcher thật (`HomeShim.REAL_HOME`), nếu lỗi thì mở launcher khác.
+- Thử trước (chưa đổi mặc định): `adb shell am start -n com.tvguard.app/.HomeShim` -> phải thấy App Drawer hiện lên.
+- Đặt làm launcher mặc định: `adb shell cmd package set-home-activity com.tvguard.app/.HomeShim`
+- HOÀN TÁC: `adb shell cmd package set-home-activity tungbui.drawer/.MainActivity`
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 
