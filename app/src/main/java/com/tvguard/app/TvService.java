@@ -72,7 +72,7 @@ public class TvService extends AccessibilityService {
     }
 
     // Tro ly giong noi cua TV luon hien khi bat TV -> dung lam tin hieu "TV vua bat" de khoi phuc + mo app thu nho
-    private static final String VOICE_PKG = "com.xiaomi.voicecontrol";
+    private static final String VOICE_PKG = "com.xiaomi.mitv.voicecontrol";
     private static long lastVoice = 0, lastVoiceLaunch = 0;
 
     private void onVoiceShown() {

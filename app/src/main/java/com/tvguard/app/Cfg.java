@@ -272,6 +272,7 @@ public class Cfg {
     static volatile boolean watcherStarted = false;
     private static final String WATCH_PATH = "/data/local/tmp/tvguardwatch.sh";
     private static final String WATCH_LOG = "/data/local/tmp/tvguard_watch.log";
+    private static final String WATCH_VER = "3";       // phai khop dong dau "# ver N" cua assets/tvguardwatch.sh
 
     static void startWatcher(final Context c, boolean force) {
         if (!"tv".equals(role(c)) || !forceOffEnabled(c) || !sp(c).getBoolean("adbOk", false)) return;
@@ -282,10 +283,15 @@ public class Cfg {
             for (int i = 0; i < 6; i++) {
                 try {
                     java.io.File dir = app.getFilesDir();
-                    // ket qua lan chay truoc (cho biet nut nguon / dong hang loat co kich hoat duoc khong)
-                    String prev = AdbLocal.exec(dir, 5555, "tail -n 14 " + WATCH_LOG + " 2>/dev/null");
-                    if (prev != null && !prev.trim().isEmpty())
-                        log(app, "Bộ canh nút nguồn (lần trước): " + prev.trim().replace("\n", " | "));
+                    // ghi vao nhat ky cac su kien quan trong cua bo canh (neu co moi)
+                    String ev = AdbLocal.exec(dir, 5555, "grep -E 'TAT NGUON|dong app|mo lai|Back/Home|cap quyen' " + WATCH_LOG + " 2>/dev/null | tail -n 8");
+                    if (ev != null && !ev.trim().isEmpty() && !ev.trim().equals(sp(app).getString("watchSeen", ""))) {
+                        sp(app).edit().putString("watchSeen", ev.trim()).apply();
+                        log(app, "Bộ canh nút nguồn: " + ev.trim().replace("\n", " | "));
+                    }
+                    // dang chay dung phien ban thi giu nguyen (khoi dong lai se giet bo canh khi no dang tat nguon)
+                    String st = AdbLocal.exec(dir, 5555, "if pgrep -f 'tvguardwatc[h]' >/dev/null 2>&1 && [ \"$(head -n 1 " + WATCH_PATH.replace("tvguardwatch", "tvguardwatc[h]") + ")\" = \"# ver " + WATCH_VER + "\" ]; then echo RUNNING; else echo STOPPED; fi");
+                    if (!force && st != null && st.contains("RUNNING")) return;
                     AdbLocal.exec(dir, 5555, "pkill -f 'tvguardwatc[h]'; pkill -x getevent; echo ok");
                     String script = readAsset(app, "tvguardwatch.sh");
                     AdbLocal.exec(dir, 5555, "cat > " + WATCH_PATH + " <<'EOF'\n" + script + "\nEOF\n"
@@ -407,7 +413,8 @@ public class Cfg {
         sp(c).edit().putLong("grantWall", wall).apply();
         final Context app = c.getApplicationContext();
         final String p = app.getPackageName();
-        final String cmd = "pm grant " + p + " " + WSS + ";"
+        final String cmd = "date +%s > /data/local/tmp/tvguard_grace;"
+                + "pm grant " + p + " " + WSS + ";"
                 + "appops set " + p + " SYSTEM_ALERT_WINDOW allow;"
                 + "cmd appops set " + p + " RUN_IN_BACKGROUND allow;"
                 + "cmd appops set " + p + " RUN_ANY_IN_BACKGROUND allow;"

@@ -10,8 +10,8 @@ android {
         applicationId 'com.tvguard.app'
         minSdk 30
         targetSdk 34
-        versionCode 13
-        versionName '1.12'
+        versionCode 14
+        versionName '1.13'
     }
     // Khoa ky CO DINH (luu trong repo): moi lan build tren GitHub deu cung chu ky,
     // nen cai de (adb install -r) khong can go app, khong mat quyen/cai dat.
