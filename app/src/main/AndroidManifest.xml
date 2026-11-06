@@ -14,15 +14,6 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
-    <!-- Cho phep thay launcher that (App Drawer) va cac launcher khac de HomeShim chuyen tiep -->
-    <queries>
-        <package android:name="tungbui.drawer" />
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.HOME" />
-        </intent>
-    </queries>
-
     <application
         android:name=".TvApp"
         android:allowBackup="false"
@@ -49,22 +40,15 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Launcher trung gian, trong suot: chi chay khoi phuc roi mo launcher that. Chi co tac dung khi duoc dat lam
-             launcher mac dinh bang: adb shell cmd package set-home-activity com.tvguard.app/.HomeShim -->
+        <!-- Muc khoi dong trong suot (khong ve gi): launcher/app khac goi dich danh bang thanh phan
+             com.tvguard.app/.BootTrigger. KHONG co intent-filter launcher de khong hien trong danh sach ung dung. -->
         <activity
-            android:name=".HomeShim"
+            android:name=".BootTrigger"
             android:exported="true"
-            android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:stateNotNeeded="true"
             android:theme="@style/ShimTheme"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            android:label="TV Guard (nền)" />
 
         <activity android:name=".TvActivity" android:exported="false" android:launchMode="singleTask" />
         <activity android:name=".ParentActivity" android:exported="false" />

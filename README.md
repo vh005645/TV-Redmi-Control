@@ -1,4 +1,4 @@
-# TV Guard v1.18 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.21 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -127,6 +127,21 @@ App Drawer (`tungbui.drawer`) là launcher mặc định; hệ thống tự kh�
 - Thử trước (chưa đổi mặc định): `adb shell am start -n com.tvguard.app/.HomeShim` -> phải thấy App Drawer hiện lên.
 - Đặt làm launcher mặc định: `adb shell cmd package set-home-activity com.tvguard.app/.HomeShim`
 - HOÀN TÁC: `adb shell cmd package set-home-activity tungbui.drawer/.MainActivity`
+
+### v1.19 - Projectivy
+- `HomeShim` chuyển tiếp theo thứ tự `HomeShim.PREFER` = Projectivy (`com.spocky.projengmenu`) rồi App Drawer, nếu launcher đó đang cài.
+  Giữ `HomeShim` làm launcher mặc định (đã chạy được lúc TV thức dậy) -> không cần Projectivy "mở ứng dụng khi khởi động".
+- `BootTrigger` ("TV Guard (nền)"): mục khởi động trong suốt (Theme.NoDisplay) để Projectivy gọi ở mục mở ứng dụng khi khởi động,
+  tránh mở màn hình TV Guard. Nhật ký ghi "BootTrigger chạy" nếu được gọi; "Mở app (thủ công)" nghĩa là Projectivy mở nhầm màn hình chính.
+
+### v1.20 - đã XÓA HomeShim
+Theo yêu cầu, bỏ hẳn HomeShim (launcher trung gian) khỏi code và manifest. Các mục từ v1.15–v1.19 nói về HomeShim không còn áp dụng.
+Còn lại `BootTrigger` ("TV Guard (nền)", trong suốt) để một launcher khác (Projectivy) gọi nếu muốn; xóa nó cũng được.
+TV Guard KHÔNG còn được hệ thống tự gọi lúc TV thức dậy từ chế độ chờ; chỉ còn các đường cũ (Trợ năng, bộ canh shell, điện thoại cầu nối...).
+
+### v1.21
+`BootTrigger` không còn là mục launcher (không hiện trong danh sách ứng dụng); chỉ gọi được bằng tên thành phần
+`com.tvguard.app/.BootTrigger`, dùng cho App Drawer bản 1.2.0 (xem AppDrawerTV-1.2.0).
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 

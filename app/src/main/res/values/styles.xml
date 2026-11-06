@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- HomeShim: khong ve gi len man hinh, khong co man hinh cho (splash) luc khoi dong -->
+    <!-- BootTrigger: khong ve gi len man hinh, khong co man hinh cho (splash) luc khoi dong -->
     <style name="ShimTheme" parent="@android:style/Theme.NoDisplay">
         <item name="android:windowDisablePreview">true</item>
         <item name="android:windowAnimationStyle">@null</item>
