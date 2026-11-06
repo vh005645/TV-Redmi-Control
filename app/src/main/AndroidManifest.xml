@@ -40,15 +40,21 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Muc khoi dong trong suot (khong ve gi): launcher/app khac goi dich danh bang thanh phan
-             com.tvguard.app/.BootTrigger. KHONG co intent-filter launcher de khong hien trong danh sach ung dung. -->
+        <!-- Muc khoi dong trong suot (khong ve gi): hien trong danh sach ung dung cua launcher TV voi ten "TV Guard (nen)"
+             de Projectivy co the chon o muc mo ung dung khi khoi dong (khong mo man hinh TV Guard).
+             App Drawer 1.2.0 goi truc tiep bang ten thanh phan com.tvguard.app/.BootTrigger nen khong can muc nay. -->
         <activity
             android:name=".BootTrigger"
             android:exported="true"
             android:excludeFromRecents="true"
             android:stateNotNeeded="true"
             android:theme="@style/ShimTheme"
-            android:label="TV Guard (nền)" />
+            android:label="TV Guard (nền)">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity android:name=".TvActivity" android:exported="false" android:launchMode="singleTask" />
         <activity android:name=".ParentActivity" android:exported="false" />

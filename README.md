@@ -1,4 +1,4 @@
-# TV Guard v1.21 - kiểm soát trẻ em trên Redmi TV (Android 11+)
+# TV Guard v1.22 - kiểm soát trẻ em trên Redmi TV (Android 11+)
 
 Một APK dùng cho cả 2 thiết bị: mở lần đầu sẽ hỏi "TV" hay "điện thoại phụ huynh".
 Giao tiếp qua Firebase Realtime Database (REST).
@@ -142,6 +142,10 @@ TV Guard KHÔNG còn được hệ thống tự gọi lúc TV thức dậy từ 
 ### v1.21
 `BootTrigger` không còn là mục launcher (không hiện trong danh sách ứng dụng); chỉ gọi được bằng tên thành phần
 `com.tvguard.app/.BootTrigger`, dùng cho App Drawer bản 1.2.0 (xem AppDrawerTV-1.2.0).
+
+### v1.22
+`BootTrigger` ("TV Guard (nền)") hiện lại trong danh sách ứng dụng (chỉ LEANBACK_LAUNCHER) để Projectivy chọn ở mục mở ứng dụng khi khởi động.
+Nhật ký ghi "BootTrigger chạy" nếu được gọi; "Mở app (thủ công)" lúc bật TV nghĩa là launcher mở nhầm màn hình chính của TV Guard.
 
 Cách kiểm tra: tắt TV, bật lại, đợi 1-2 phút, mở app xem "Nhật ký khởi động" (dòng "Khôi phục (...)", "Ép bind lại...").
 
